@@ -6,11 +6,7 @@ from urllib.parse import urlparse
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-try:
-    # Prefer the maintained package
-    from langchain_ollama import ChatOllama  # type: ignore
-except Exception:  # fallback for environments without langchain-ollama
-    from langchain_community.chat_models.ollama import ChatOllama  # type: ignore
+from langchain_ollama import ChatOllama  # type: ignore
 
 from .config import llm_cfg
 

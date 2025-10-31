@@ -23,9 +23,7 @@ class EmbeddingConfig:
 
 @dataclass(frozen=True)
 class LLMConfig:
-    ollama_model: str = os.getenv("OLLAMA_MODEL", "hf.co/MaziyarPanahi/Phi-4-mini-instruct-GGUF:Q4_K_M")
-    # ollama_model: str = os.getenv("OLLAMA_MODEL", "hf.co/yandex/YandexGPT-5-Lite-8B-instruct-GGUF:Q4_K_M")
-    # ollama_model: str = os.getenv("OLLAMA_MODEL", "hf.co/MaziyarPanahi/Mistral-7B-Instruct-v0.3-GGUF:Q4_K_M")
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "hf.co/yandex/YandexGPT-5-Lite-8B-instruct-GGUF:Q4_K_M")
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 

@@ -1,6 +1,7 @@
 langchain==0.3.7
 langchain-community==0.3.7
 langchain-core==0.3.63
+langchain-ollama==0.2.2
 langsmith==0.1.147
 langchain-text-splitters==0.3.2
 faiss-cpu==1.8.0.post1
