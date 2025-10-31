@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, List, Optional
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from .llm import get_chat_llm
 from .ingest import load_vector_store
@@ -37,13 +38,30 @@ TASK_PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 
-def generate_task(topic: str) -> Dict[str, str]:
+def generate_task(topic: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, str]:
     vdb = load_vector_store()
     retriever = vdb.as_retriever(k=8)
-    context_docs = retriever.get_relevant_documents(topic)
+    context_docs = retriever.invoke(topic)
     context = "\n---\n".join(d.page_content for d in context_docs)
 
-    chain = TASK_PROMPT | get_chat_llm() | StrOutputParser()
-    out = chain.invoke({"topic": topic, "context": context})
+    # Формируем историю сообщений
+    messages = [SystemMessage(content=TASK_SYSTEM)]
+    
+    if history:
+        for msg in history:
+            if msg["role"] == "user":
+                messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                messages.append(AIMessage(content=msg["content"]))
+    
+    # Добавляем текущий запрос с контекстом
+    prompt_text = f"Составь задание по теме: {topic}. Ограничивайся только информацией из Контекста.\nВключи: цель задания, формулировку, критерии оценивания, ожидаемый формат ответа.\n\nКонтекст:\n{context}\n\nЗадание:"
+    messages.append(HumanMessage(content=prompt_text))
+    
+    # Вызываем LLM
+    llm = get_chat_llm()
+    response = llm.invoke(messages)
+    out = response.content if hasattr(response, 'content') else str(response)
+    
     return {"topic": topic, "task": out}
 

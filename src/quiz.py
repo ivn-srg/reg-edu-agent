@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from .llm import get_chat_llm
 from .ingest import load_vector_store
@@ -41,13 +42,30 @@ QUIZ_PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 
-def generate_quiz(topic: str, num: int = 5) -> Dict[str, str]:
+def generate_quiz(topic: str, num: int = 5, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, str]:
     vdb = load_vector_store()
     retriever = vdb.as_retriever(k=6)
-    context_docs = retriever.get_relevant_documents(topic)
+    context_docs = retriever.invoke(topic)
     context = "\n---\n".join(d.page_content for d in context_docs)
 
-    chain = QUIZ_PROMPT | get_chat_llm() | StrOutputParser()
-    out = chain.invoke({"topic": topic, "num": num, "context": context})
+    # Формируем историю сообщений
+    messages = [SystemMessage(content=QUIZ_SYSTEM)]
+    
+    if history:
+        for msg in history:
+            if msg["role"] == "user":
+                messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                messages.append(AIMessage(content=msg["content"]))
+    
+    # Добавляем текущий запрос с контекстом
+    prompt_text = f"Сгенерируй {num} вопросов по теме: {topic}.\nОграничивайся информацией в Контексте. Форматируй как пронумерованный список.\n\nКонтекст:\n{context}\n\nВопросы:"
+    messages.append(HumanMessage(content=prompt_text))
+    
+    # Вызываем LLM
+    llm = get_chat_llm()
+    response = llm.invoke(messages)
+    out = response.content if hasattr(response, 'content') else str(response)
+    
     return {"topic": topic, "questions": out}
 

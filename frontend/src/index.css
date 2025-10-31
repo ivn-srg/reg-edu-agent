@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Playfair+Display:wght@700&display=swap');
+
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 249 250 251;
+    --text-primary: 31 41 55;
+    --text-secondary: 107 114 128;
+    --primary: 37 99 235;
+    --primary-hover: 59 130 246;
+    --bubble-agent: 229 231 235;
+    --bubble-user: 37 99 235;
+  }
+
+  .dark {
+    --background: 17 24 39;
+    --text-primary: 243 244 246;
+    --text-secondary: 156 163 175;
+    --primary: 59 130 246;
+    --primary-hover: 96 165 250;
+    --bubble-agent: 31 41 55;
+    --bubble-user: 59 130 246;
+  }
+
+  body {
+    background-color: rgb(var(--background));
+    color: rgb(var(--text-primary));
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .chat-bubble {
+    @apply rounded-2xl shadow-md transition-all duration-300;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.3s ease-in;
+  }
+
+  .slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

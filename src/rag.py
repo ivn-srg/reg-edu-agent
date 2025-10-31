@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
@@ -42,6 +43,7 @@ SYSTEM_PROMPT = (
 
 QA_TEMPLATE = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),
+    MessagesPlaceholder(variable_name="history"),
     ("human", "Вопрос: {question}\n\nКонтекст:\n{context}\n\nТвой ответ:"),
 ])
 
@@ -59,14 +61,26 @@ class RAGQA:
         self.retriever = self.vdb.as_retriever(k=k)
         self.llm = llm or get_chat_llm()
 
-        self.chain = (
-            {"context": self.retriever | _format_docs, "question": RunnablePassthrough()}  # type: ignore
-            | QA_TEMPLATE
-            | self.llm
-            | StrOutputParser()
-        )
-
-    def ask(self, question: str) -> Dict[str, str]:
-        answer = self.chain.invoke(question)
+    def ask(self, question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, str]:
+        context_docs = self.retriever.invoke(question)
+        context = _format_docs(context_docs)
+        
+        # Формируем историю сообщений
+        messages = [SystemMessage(content=SYSTEM_PROMPT)]
+        
+        if history:
+            for msg in history:
+                if msg["role"] == "user":
+                    messages.append(HumanMessage(content=msg["content"]))
+                elif msg["role"] == "assistant":
+                    messages.append(AIMessage(content=msg["content"]))
+        
+        # Добавляем текущий вопрос с контекстом
+        messages.append(HumanMessage(content=f"Вопрос: {question}\n\nКонтекст:\n{context}\n\nТвой ответ:"))
+        
+        # Вызываем LLM
+        response = self.llm.invoke(messages)
+        answer = response.content if hasattr(response, 'content') else str(response)
+        
         return {"question": question, "answer": answer}
 
