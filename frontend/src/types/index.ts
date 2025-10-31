@@ -16,5 +16,6 @@ export interface ChatState {
   setCurrentType: (type: MessageType | null) => void;
   setLoading: (loading: boolean) => void;
   clearMessages: () => void;
+  exportDialog: () => void;
 }
 

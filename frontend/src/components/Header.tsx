@@ -1,9 +1,9 @@
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Download } from 'lucide-react';
 import { useChatStore } from '../store/chatStore';
 import TypeSelector from './TypeSelector';
 
 export default function Header() {
-  const { currentType, clearMessages } = useChatStore();
+  const { currentType, clearMessages, exportDialog, messages } = useChatStore();
 
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
@@ -26,6 +26,16 @@ export default function Header() {
             <div className="flex-1 md:flex-none">
               <TypeSelector />
             </div>
+            {messages.length > 0 && (
+              <button
+                onClick={exportDialog}
+                className="px-3 md:px-4 py-2 text-xs md:text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors whitespace-nowrap flex items-center gap-1.5"
+                title="Экспортировать диалог в Excel"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden md:inline">Экспорт</span>
+              </button>
+            )}
             {currentType && (
               <button
                 onClick={clearMessages}

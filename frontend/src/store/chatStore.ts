@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ChatState, Message } from '../types';
+import { exportDialogToExcel } from '../utils/exportDialog';
 
 export const useChatStore = create<ChatState>((set) => ({
   messages: [],
@@ -22,5 +23,10 @@ export const useChatStore = create<ChatState>((set) => ({
   setLoading: (loading) => set({ isLoading: loading }),
   
   clearMessages: () => set({ messages: [], currentType: null }),
+  
+  exportDialog: () => {
+    const state = useChatStore.getState();
+    exportDialogToExcel(state.messages);
+  },
 }));
 
