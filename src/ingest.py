@@ -6,6 +6,7 @@ from typing import Iterable, List
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.schema import Document
+from langchain_core.embeddings import Embeddings
 from sentence_transformers import SentenceTransformer
 
 from .config import paths, embed_cfg, chunk_cfg, ensure_dirs
@@ -54,7 +55,7 @@ def build_vector_store(force_rebuild: bool = True) -> VectorDB:
 
     model = get_embeddings_model()
 
-    class STEmbeddings:
+    class STEmbeddings(Embeddings):
         def embed_documents(self, texts: List[str]) -> List[List[float]]:
             return model.encode(texts, batch_size=embed_cfg.batch_size, show_progress_bar=True).tolist()
 
@@ -69,7 +70,7 @@ def build_vector_store(force_rebuild: bool = True) -> VectorDB:
 def load_vector_store() -> VectorDB:
     model = get_embeddings_model()
 
-    class STEmbeddings:
+    class STEmbeddings(Embeddings):
         def embed_documents(self, texts: List[str]) -> List[List[float]]:
             return model.encode(texts, batch_size=embed_cfg.batch_size, show_progress_bar=False).tolist()
 

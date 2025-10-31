@@ -1,10 +1,13 @@
 langchain==0.3.7
 langchain-community==0.3.7
+langchain-core==0.3.63
+langsmith==0.1.147
 langchain-text-splitters==0.3.2
 faiss-cpu==1.8.0.post1
 sentence-transformers==3.2.1
 pypdf==4.3.1
 python-docx==1.1.2
+docx2txt==0.9
 fastapi==0.115.5
 uvicorn==0.32.0
 pydantic==2.9.2

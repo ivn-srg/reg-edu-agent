@@ -17,7 +17,7 @@ class Paths:
 
 @dataclass(frozen=True)
 class EmbeddingConfig:
-    model_name: str = os.getenv("EMBEDDINGS_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    model_name: str = os.getenv("EMBEDDINGS_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     batch_size: int = int(os.getenv("EMBEDDINGS_BATCH_SIZE", "32"))
 
 
@@ -29,7 +29,7 @@ class LLMConfig:
     openai_base_url: str | None = os.getenv("OPENAI_BASE_URL")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     # Ollama
-    ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "hf.co/MaziyarPanahi/Phi-4-mini-instruct-GGUF:Q4_K_M")
 
 
 @dataclass(frozen=True)
