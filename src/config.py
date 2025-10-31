@@ -23,13 +23,10 @@ class EmbeddingConfig:
 
 @dataclass(frozen=True)
 class LLMConfig:
-    provider: str = os.getenv("LLM_PROVIDER", "ollama")  # "openai" or "ollama"
-    # OpenAI-compatible
-    openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
-    openai_base_url: str | None = os.getenv("OPENAI_BASE_URL")
-    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    # Ollama
     ollama_model: str = os.getenv("OLLAMA_MODEL", "hf.co/MaziyarPanahi/Phi-4-mini-instruct-GGUF:Q4_K_M")
+    # ollama_model: str = os.getenv("OLLAMA_MODEL", "hf.co/yandex/YandexGPT-5-Lite-8B-instruct-GGUF:Q4_K_M")
+    # ollama_model: str = os.getenv("OLLAMA_MODEL", "hf.co/MaziyarPanahi/Mistral-7B-Instruct-v0.3-GGUF:Q4_K_M")
+    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 
 @dataclass(frozen=True)
