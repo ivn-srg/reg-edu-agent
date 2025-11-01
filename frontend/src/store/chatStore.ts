@@ -49,9 +49,13 @@ export const useChatStore = create<ChatState>()(
       // Conversation management
       setCurrentConversationId: (id) => set({ currentConversationId: id }),
 
-      createNewConversation: async (type) => {
+      createNewConversation: async (type, firstQuestion?: string) => {
         const state = get();
-        const title = `Новый диалог ${new Date().toLocaleString('ru-RU')}`;
+        // Используем первый вопрос (первые 64 символа) или дефолтное название
+        let title = 'Новый диалог';
+        if (firstQuestion) {
+          title = firstQuestion.length > 64 ? firstQuestion.substring(0, 64) + '...' : firstQuestion;
+        }
         
         try {
           const conversation = await apiClient.createConversation({

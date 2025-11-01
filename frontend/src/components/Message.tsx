@@ -1,22 +1,42 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, User } from 'lucide-react';
+import { Bot, User, Copy, Check, RotateCcw } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import type { Message as MessageType } from '../types';
+import GenerationTimer from './GenerationTimer';
 
 interface MessageProps {
   message: MessageType;
+  onResend?: (content: string) => void;
 }
 
-export default function Message({ message }: MessageProps) {
+export default function Message({ message, onResend }: MessageProps) {
   const isUser = message.role === 'user';
+  const [copied, setCopied] = useState(false);
   const time = new Date(message.timestamp).toLocaleTimeString('ru-RU', {
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const handleResend = () => {
+    if (onResend) {
+      onResend(message.content);
+    }
+  };
 
   return (
     <Tooltip.Provider>
@@ -24,24 +44,25 @@ export default function Message({ message }: MessageProps) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className={`flex items-end gap-3 mb-4 ${isUser ? 'justify-end' : 'justify-start'}`}
+        className={`flex items-end gap-2 md:gap-3 mb-4 ${isUser ? 'justify-end' : 'justify-start'}`}
       >
         {!isUser && (
-          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gray-200 dark:bg-gray-700 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 mb-1">
             <Bot className="w-5 h-5 md:w-6 md:h-6 text-gray-800 dark:text-gray-100 dark:text-white" />
           </div>
         )}
         
+        <div className="flex flex-col gap-1 min-w-0" style={{ maxWidth: isUser ? 'calc(80% - 2.5rem)' : 'calc(80% - 2.5rem)' }}>
         <Tooltip.Root>
           <Tooltip.Trigger asChild>
             <div
-              className={`chat-bubble max-w-[85%] sm:max-w-[80%] md:max-w-[70%] px-3 py-2 md:px-4 md:py-3 cursor-default ${
+              className={`chat-bubble px-3 py-2 md:px-4 md:py-3 cursor-default break-words ${
                 isUser
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 dark:bg-gray-700 text-gray-800 dark:text-gray-100 dark:text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 dark:text-white'
               }`}
             >
-              <div className="text-sm md:text-base leading-relaxed prose prose-sm md:prose-base max-w-none prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-pre:my-2 prose-blockquote:my-2 prose-hr:my-3 prose-table:my-3">
+              <div className="text-sm md:text-base leading-relaxed prose prose-sm md:prose-base max-w-none prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-1 prose-pre:my-2 prose-blockquote:my-2 prose-hr:my-3 prose-table:my-3 break-words overflow-hidden">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw, rehypeSanitize]}
@@ -56,16 +77,16 @@ export default function Message({ message }: MessageProps) {
                     code: ({ className, children, ...props }) => {
                       const match = /language-(\w+)/.exec(className || '');
                       return match ? (
-                        <code className={`${className} block bg-gray-800 text-gray-100 p-3 rounded-lg overflow-x-auto my-2`} {...props}>
+                        <code className={`${className} block bg-gray-800 text-gray-100 p-3 rounded-lg overflow-x-auto my-2 max-w-full`} {...props}>
                           {children}
                         </code>
                       ) : (
-                        <code className={`${isUser ? 'bg-blue-700' : 'bg-gray-300 dark:bg-gray-600'} px-1.5 py-0.5 rounded text-sm`} {...props}>
+                        <code className={`${isUser ? 'bg-blue-700' : 'bg-gray-300 dark:bg-gray-600'} px-1.5 py-0.5 rounded text-sm break-all`} {...props}>
                           {children}
                         </code>
                       );
                     },
-                    pre: ({ children }) => <pre className="my-2">{children}</pre>,
+                    pre: ({ children }) => <pre className="my-2 overflow-x-auto max-w-full">{children}</pre>,
                     blockquote: ({ children }) => (
                       <blockquote className={`border-l-4 ${isUser ? 'border-blue-300' : 'border-gray-400 dark:border-gray-500'} pl-4 my-2 italic`}>
                         {children}
@@ -77,8 +98,8 @@ export default function Message({ message }: MessageProps) {
                       </a>
                     ),
                     table: ({ children }) => (
-                      <div className="overflow-x-auto my-3">
-                        <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-600">{children}</table>
+                      <div className="overflow-x-auto my-3 max-w-full">
+                        <table className="border-collapse border border-gray-300 dark:border-gray-600">{children}</table>
                       </div>
                     ),
                     th: ({ children }) => (
@@ -110,9 +131,63 @@ export default function Message({ message }: MessageProps) {
             </Tooltip.Content>
           </Tooltip.Portal>
         </Tooltip.Root>
+        
+        {!isUser && message.generationTime !== undefined && (
+          <GenerationTimer isGenerating={false} finalTime={message.generationTime} />
+        )}
+        
+        {/* Action buttons */}
+        <div className="flex items-center gap-1 mt-1">
+          <Tooltip.Root>
+            <Tooltip.Trigger asChild>
+              <button
+                onClick={handleCopy}
+                className={`p-1.5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors ${
+                  isUser ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'
+                }`}
+                aria-label="Копировать"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content
+                className="bg-gray-800 dark:bg-gray-900 text-white text-xs rounded px-2 py-1 shadow-lg z-50"
+                sideOffset={5}
+              >
+                {copied ? 'Скопировано!' : 'Копировать'}
+                <Tooltip.Arrow className="fill-gray-800 dark:fill-gray-900" />
+              </Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+          
+          {isUser && onResend && (
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <button
+                  onClick={handleResend}
+                  className="p-1.5 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-blue-600 dark:text-blue-400"
+                  aria-label="Переотправить"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="bg-gray-800 dark:bg-gray-900 text-white text-xs rounded px-2 py-1 shadow-lg z-50"
+                  sideOffset={5}
+                >
+                  Переотправить
+                  <Tooltip.Arrow className="fill-gray-800 dark:fill-gray-900" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          )}
+        </div>
+        </div>
 
         {isUser && (
-          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 mb-1">
             <User className="w-5 h-5 md:w-6 md:h-6 text-white" />
           </div>
         )}

@@ -6,6 +6,7 @@ export interface Message {
   role: 'user' | 'assistant';
   timestamp: Date;
   type?: MessageType;
+  generationTime?: number; // время генерации в секундах
 }
 
 export interface ChatState {
@@ -21,7 +22,7 @@ export interface ChatState {
   clearMessages: () => void;
   exportDialog: () => void;
   setCurrentConversationId: (id: number | null) => void;
-  createNewConversation: (type: MessageType) => Promise<number | null>;
+  createNewConversation: (type: MessageType, firstQuestion?: string) => Promise<number | null>;
   saveMessageToDb: (role: 'user' | 'assistant', content: string) => Promise<void>;
   loadConversation: (conversationId: number) => Promise<void>;
   setOnConversationCreated: (callback: (() => void) | null) => void;

@@ -14,6 +14,7 @@ export default function ChatInput() {
     currentConversationId,
     createNewConversation,
     saveMessageToDb,
+    onConversationCreated,
   } = useChatStore();
 
   const getHistory = (): MessageHistory[] => {
@@ -35,7 +36,8 @@ export default function ChatInput() {
     // Создаем новый диалог, если его еще нет
     let conversationId = currentConversationId;
     if (!conversationId) {
-      conversationId = await createNewConversation(currentType);
+      // Передаем первый вопрос как название диалога
+      conversationId = await createNewConversation(currentType, userMessage);
       if (!conversationId) {
         console.error('Failed to create conversation');
         return;
@@ -57,6 +59,9 @@ export default function ChatInput() {
 
     setLoading(true);
 
+    // Засекаем время начала генерации
+    const startTime = Date.now();
+
     try {
       let response;
       
@@ -66,37 +71,38 @@ export default function ChatInput() {
         case 'question':
           response = await apiClient.ask({ question: userMessage, history });
           assistantMessage = response.answer;
-          addMessage({
-            role: 'assistant',
-            content: assistantMessage,
-            type: currentType,
-          });
           break;
         
         case 'quiz':
           response = await apiClient.quiz({ topic: userMessage, num: 5, history });
           assistantMessage = `Квиз по теме "${response.topic}":\n\n${response.questions}`;
-          addMessage({
-            role: 'assistant',
-            content: assistantMessage,
-            type: currentType,
-          });
           break;
         
         case 'task':
           response = await apiClient.task({ topic: userMessage, history });
           assistantMessage = `Задание по теме "${response.topic}":\n\n${response.task}`;
-          addMessage({
-            role: 'assistant',
-            content: assistantMessage,
-            type: currentType,
-          });
           break;
       }
+      
+      // Вычисляем время генерации
+      const generationTime = (Date.now() - startTime) / 1000;
+      
+      // Добавляем сообщение ассистента с временем генерации
+      addMessage({
+        role: 'assistant',
+        content: assistantMessage,
+        type: currentType,
+        generationTime,
+      });
       
       // Сохраняем ответ ассистента в БД
       if (assistantMessage) {
         await saveMessageToDb('assistant', assistantMessage);
+      }
+      
+      // Обновляем список диалогов после каждого сообщения
+      if (onConversationCreated) {
+        onConversationCreated();
       }
     } catch (error) {
       console.error('Error sending message:', error);

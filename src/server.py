@@ -21,6 +21,9 @@ app = FastAPI(title="RAG-EDU Agent", version="1.0")
 ensure_dirs()
 init_db()  # Инициализация базы данных
 
+# Кешируем RAG модель для переиспользования между запросами
+_rag_cache = {}
+
 # Настройка CORS
 app.add_middleware(
     CORSMiddleware,
@@ -126,9 +129,16 @@ def ingest() -> dict:
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def _get_rag_instance(k: int = 5) -> RAGQA:
+    """Получает закешированный экземпляр RAG или создает новый."""
+    if k not in _rag_cache:
+        _rag_cache[k] = RAGQA(k=k)
+    return _rag_cache[k]
+
+
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
-    qa = RAGQA(k=req.k or 5)
+    qa = _get_rag_instance(k=req.k or 5)
     history = [{"role": h.role, "content": h.content} for h in (req.history or [])]
     out = qa.ask(req.question, history=history)
     return AskResponse(**out)

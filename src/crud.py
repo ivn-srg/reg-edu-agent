@@ -45,9 +45,9 @@ def get_user_conversations(
     """Получение всех диалогов пользователя с фильтрацией и поиском."""
     query = db.query(Conversation).filter(Conversation.user_id == user_id)
     
-    # Поиск по заголовку
+    # Поиск по заголовку (case-insensitive для всех символов, включая кириллицу)
     if search:
-        query = query.filter(Conversation.title.ilike(f"%{search}%"))
+        query = query.filter(func.lower(Conversation.title).like(func.lower(f"%{search}%")))
     
     # Фильтр по типу
     if conversation_type:
@@ -80,7 +80,7 @@ def count_user_conversations(
     query = db.query(func.count(Conversation.id)).filter(Conversation.user_id == user_id)
     
     if search:
-        query = query.filter(Conversation.title.ilike(f"%{search}%"))
+        query = query.filter(func.lower(Conversation.title).like(func.lower(f"%{search}%")))
     if conversation_type:
         query = query.filter(Conversation.conversation_type == conversation_type)
     if date_from:

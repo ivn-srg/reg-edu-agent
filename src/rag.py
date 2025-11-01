@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import List, Dict, Optional
+import time
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -10,6 +11,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 from .ingest import load_vector_store
 from .llm import get_chat_llm
+from .validation import semantic_gating, comprehensive_validation
 
 
 SYSTEM_PROMPT = (
@@ -50,6 +52,15 @@ SYSTEM_PROMPT = (
     "   • Смысл выше скорости\n"
     "   • Логика выше объёма\n"
     "   • Проверяемость выше эффектности\n\n"
+    "5. **Форматирование ответа**  \n"
+    "   • ОБЯЗАТЕЛЬНО используй Markdown для структурирования ответа\n"
+    "   • Используй заголовки (##, ###) для разделения разделов\n"
+    "   • Используй списки (-, *) для перечислений\n"
+    "   • Используй **жирный** для важных терминов\n"
+    "   • Используй `код` для технических терминов и команд\n"
+    "   • Используй блоки кода ```язык``` для примеров кода\n"
+    "   • Используй > для цитат и важных замечаний\n"
+    "   • Используй таблицы | для сравнений\n\n"
     "Теперь ты готов помогать студенту. Помни: ВСЕГДА проверяй релевантность вопроса и контекста!"
 )
 
@@ -62,27 +73,47 @@ QA_TEMPLATE = ChatPromptTemplate.from_messages([
 
 
 def _format_docs(docs) -> str:
-    parts = []
-    for d in docs:
-        parts.append(d.page_content)
-    return "\n---\n".join(parts)
+    """Быстрое форматирование документов с использованием list comprehension."""
+    return "\n---\n".join(d.page_content for d in docs)
 
 
 class RAGQA:
-    def __init__(self, llm: BaseChatModel | None = None, k: int = 5) -> None:
+    def __init__(self, llm: BaseChatModel | None = None, k: int = 5, similarity_threshold: float = 0.3) -> None:
         self.vdb = load_vector_store()
-        self.retriever = self.vdb.as_retriever(k=k)
+        # Используем простой retriever для скорости
+        self.retriever = self.vdb.as_retriever(k=k * 2)  # Берем больше для последующей фильтрации
         self.llm = llm or get_chat_llm()
+        self.similarity_threshold = similarity_threshold
+        self.k = k
 
     def ask(self, question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, str]:
-        context_docs = self.retriever.invoke(question)
+        start_time = time.time()
+        
+        # Шаг 1: Быстрый retrieval (без compression)
+        raw_docs = self.retriever.invoke(question)
+        
+        # Шаг 2: Semantic gating - фильтруем документы
+        filtered_docs = semantic_gating(question, raw_docs, threshold=self.similarity_threshold)
+        
+        # Ограничиваем до k документов
+        context_docs = filtered_docs[:self.k]
+        
+        # Проверяем, есть ли релевантные документы
+        if not context_docs or len(context_docs) == 0:
+            return {
+                "question": question,
+                "answer": "Такой информации нет в предоставленных материалах. Попробуйте задать другой вопрос"
+            }
+        
         context = _format_docs(context_docs)
         
-        # Формируем историю сообщений
+        # Формируем историю сообщений (оптимизировано)
         messages = [SystemMessage(content=SYSTEM_PROMPT)]
         
+        # Ограничиваем историю последними 4 сообщениями для скорости
         if history:
-            for msg in history:
+            recent_history = history[-4:] if len(history) > 4 else history
+            for msg in recent_history:
                 if msg["role"] == "user":
                     messages.append(HumanMessage(content=msg["content"]))
                 elif msg["role"] == "assistant":
@@ -95,5 +126,23 @@ class RAGQA:
         response = self.llm.invoke(messages)
         answer = response.content if hasattr(response, 'content') else str(response)
         
-        return {"question": question, "answer": answer}
+        # Шаг 3: Self-check валидация ответа
+        validation = comprehensive_validation(answer, context, question)
+        
+        # Если ответ не прошел валидацию, возвращаем отказ
+        if not validation["is_valid"]:
+            answer = "Такой информации нет в предоставленных материалах. Попробуйте задать другой вопрос"
+        
+        elapsed_time = time.time() - start_time
+        
+        return {
+            "question": question,
+            "answer": answer,
+            "_metadata": {
+                "processing_time": elapsed_time,
+                "docs_retrieved": len(raw_docs),
+                "docs_filtered": len(context_docs),
+                "validation": validation
+            }
+        }
 

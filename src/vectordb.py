@@ -28,8 +28,23 @@ class VectorDB:
         store = FAISS.load_local(str(path), embeddings, allow_dangerous_deserialization=True)
         return cls(path=path, faiss_store=store)
 
-    def as_retriever(self, k: int = 5):
+    def as_retriever(self, k: int = 5, fetch_k: int = None):
+        """
+        Создает retriever с оптимизированными параметрами.
+        
+        Args:
+            k: Количество документов для возврата
+            fetch_k: Количество документов для предварительной выборки (по умолчанию k*2)
+        """
         if self.faiss is None:
             raise ValueError("FAISS store is not initialized")
-        return self.faiss.as_retriever(search_type="similarity", search_kwargs={"k": k})
+        
+        # Используем fetch_k для более точного поиска
+        if fetch_k is None:
+            fetch_k = k * 2
+        
+        return self.faiss.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": k, "fetch_k": fetch_k}
+        )
 

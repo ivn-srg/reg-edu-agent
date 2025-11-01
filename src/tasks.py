@@ -8,6 +8,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from .llm import get_chat_llm
 from .ingest import load_vector_store
+from .validation import semantic_gating
 
 
 TASK_SYSTEM = (
@@ -30,6 +31,22 @@ TASK_SYSTEM = (
     "• Формулируй точно, без допущений\n"
     "• Включи: цель задания, формулировку, критерии оценивания\n"
     "• НЕ выходи за пределы предоставленных лекций\n\n"
+    "=== ОБЯЗАТЕЛЬНЫЙ ФОРМАТ ОТВЕТА (MARKDOWN) ===\n"
+    "Структурируй задание используя Markdown:\n\n"
+    "## Цель задания\n"
+    "Краткое описание цели (1-2 предложения)\n\n"
+    "## Формулировка задания\n"
+    "Подробное описание задания с использованием:\n"
+    "- Списков для перечислений\n"
+    "- **Жирного** для важных моментов\n"
+    "- `Кода` для технических терминов\n"
+    "- Блоков кода ```язык``` для примеров\n\n"
+    "## Критерии оценивания\n"
+    "| Критерий | Баллы | Описание |\n"
+    "| --- | --- | --- |\n"
+    "| ... | ... | ... |\n\n"
+    "## Ожидаемый формат ответа\n"
+    "Описание формата с примером\n\n"
     "Помни: ВСЕГДА проверяй релевантность темы и достаточность контекста!")
 
 TASK_PROMPT = ChatPromptTemplate.from_messages([
@@ -41,17 +58,32 @@ TASK_PROMPT = ChatPromptTemplate.from_messages([
 ])
 
 
-def generate_task(topic: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, str]:
+def generate_task(topic: str, history: Optional[List[Dict[str, str]]] = None, similarity_threshold: float = 0.4) -> Dict[str, str]:
     vdb = load_vector_store()
-    retriever = vdb.as_retriever(k=8)
-    context_docs = retriever.invoke(topic)
+    retriever = vdb.as_retriever(k=16)  # Берем больше для фильтрации
+    
+    # Проверяем релевантность ТЕКУЩЕЙ темы через semantic gating
+    # Разрешаем разные темы в рамках одного диалога, но только в рамках материалов
+    raw_docs = retriever.invoke(topic)
+    context_docs = semantic_gating(topic, raw_docs, threshold=similarity_threshold)
+    context_docs = context_docs[:8]  # Ограничиваем
+    
+    # Проверяем, есть ли релевантные документы
+    if not context_docs or len(context_docs) == 0:
+        return {
+            "topic": topic,
+            "task": "Такой информации нет в предоставленных материалах. Попробуйте задать другой вопрос"
+        }
+    
     context = "\n---\n".join(d.page_content for d in context_docs)
 
-    # Формируем историю сообщений
+    # Формируем историю сообщений (ограниченную для скорости)
+    # История помогает модели понять контекст, но не ограничивает темы
     messages = [SystemMessage(content=TASK_SYSTEM)]
     
     if history:
-        for msg in history:
+        recent_history = history[-2:] if len(history) > 2 else history
+        for msg in recent_history:
             if msg["role"] == "user":
                 messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":

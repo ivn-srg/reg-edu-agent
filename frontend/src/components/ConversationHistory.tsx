@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, Trash2, Plus, Search, Filter, Download, Edit2, Check, X } from 'lucide-react';
+import { MessageSquare, Trash2, Plus, Search, Filter, Download, Edit2, Check, X, Trash } from 'lucide-react';
 import { useChatStore } from '../store/chatStore';
 import { apiClient, type ConversationListItem } from '../api/client';
+import ChatTypeModal from './ChatTypeModal';
+import type { MessageType } from '../types';
 
 export default function ConversationHistory() {
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
@@ -13,6 +15,7 @@ export default function ConversationHistory() {
   const [page, setPage] = useState(0);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [showTypeModal, setShowTypeModal] = useState(false);
   const limit = 20;
   
   const { 
@@ -76,6 +79,29 @@ export default function ConversationHistory() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    if (!confirm('Вы уверены, что хотите удалить ВСЕ диалоги? Это действие нельзя отменить.')) {
+      return;
+    }
+
+    if (!confirm('Последнее предупреждение! Все диалоги будут безвозвратно удалены. Продолжить?')) {
+      return;
+    }
+
+    try {
+      // Удаляем все диалоги по одному
+      for (const conv of conversations) {
+        await apiClient.deleteConversation(conv.id);
+      }
+      
+      clearMessages();
+      await loadConversations();
+    } catch (error) {
+      console.error('Failed to delete all conversations:', error);
+      alert('Произошла ошибка при удалении диалогов');
+    }
+  };
+
   const handleExportConversation = async (conversationId: number, e: React.MouseEvent) => {
     e.stopPropagation();
     
@@ -122,8 +148,13 @@ export default function ConversationHistory() {
   };
 
   const handleNewConversation = () => {
+    setShowTypeModal(true);
+  };
+
+  const handleTypeSelect = (type: MessageType) => {
     clearMessages();
-    setCurrentType(null);
+    setCurrentType(type);
+    setShowTypeModal(false);
     setIsOpen(false);
   };
 
@@ -146,20 +177,22 @@ export default function ConversationHistory() {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatSmartDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
+    
+    // Сбрасываем время для сравнения только дат
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    if (compareDate.getTime() === today.getTime()) {
       return 'Сегодня';
-    } else if (diffDays === 1) {
+    } else if (compareDate.getTime() === yesterday.getTime()) {
       return 'Вчера';
-    } else if (diffDays < 7) {
-      return `${diffDays} дн. назад`;
     } else {
-      return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+      return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
   };
 
@@ -167,6 +200,12 @@ export default function ConversationHistory() {
 
   return (
     <>
+      <ChatTypeModal 
+        isOpen={showTypeModal} 
+        onClose={() => setShowTypeModal(false)}
+        onSelect={handleTypeSelect}
+      />
+      
       {/* Mobile toggle button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -193,13 +232,25 @@ export default function ConversationHistory() {
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 space-y-3">
-            <button
-              onClick={handleNewConversation}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Новый диалог
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={handleNewConversation}
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                Новый диалог
+              </button>
+              
+              {conversations.length > 0 && (
+                <button
+                  onClick={handleDeleteAll}
+                  className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors text-sm"
+                >
+                  <Trash className="w-4 h-4" />
+                  Очистить все
+                </button>
+              )}
+            </div>
 
             {/* Search */}
             <div className="relative">
@@ -216,7 +267,7 @@ export default function ConversationHistory() {
             {/* Filter toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm text-gray-800 dark:text-gray-200"
             >
               <Filter className="w-4 h-4" />
               Фильтры
@@ -259,17 +310,17 @@ export default function ConversationHistory() {
                       : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                        {getTypeLabel(conv.conversation_type)}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatSmartDate(conv.created_at)}
+                      </span>
+                    </div>
+                    
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                          {getTypeLabel(conv.conversation_type)}
-                        </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatDate(conv.updated_at)}
-                        </span>
-                      </div>
-                      
                       {editingId === conv.id ? (
                         <div className="flex items-center gap-1 mb-1" onClick={(e) => e.stopPropagation()}>
                           <input
@@ -293,14 +344,15 @@ export default function ConversationHistory() {
                           </button>
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-800 dark:text-gray-200 truncate">
-                          {conv.title}
-                        </p>
+                        <div>
+                          <p className="text-sm text-gray-800 dark:text-gray-200 line-clamp-2">
+                            {conv.title}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {conv.message_count} сообщений
+                          </p>
+                        </div>
                       )}
-                      
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {conv.message_count} сообщений
-                      </p>
                     </div>
                     
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

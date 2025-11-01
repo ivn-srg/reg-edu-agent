@@ -43,3 +43,9 @@ def ensure_dirs() -> None:
     paths.data_dir.mkdir(parents=True, exist_ok=True)
     paths.vector_dir.mkdir(parents=True, exist_ok=True)
 
+
+def get_embeddings():
+    """Получить модель embeddings для LangChain."""
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+    return HuggingFaceEmbeddings(model_name=embed_cfg.model_name)
+
