@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Check Theme</title>
+</head>
+<body>
+    <script>
+        console.log('darkMode in localStorage:', localStorage.getItem('darkMode'));
+        console.log('dark class on html:', document.documentElement.classList.contains('dark'));
+        // Очистка
+        localStorage.removeItem('darkMode');
+        console.log('Cleared darkMode from localStorage');
+    </script>
+    <p>Проверьте консоль браузера. localStorage очищен.</p>
+    <p><a href="/">Вернуться на главную</a></p>
+</body>
+</html>

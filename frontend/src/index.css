@@ -2,34 +2,11 @@
 
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --background: 249 250 251;
-    --text-primary: 31 41 55;
-    --text-secondary: 107 114 128;
-    --primary: 37 99 235;
-    --primary-hover: 59 130 246;
-    --bubble-agent: 229 231 235;
-    --bubble-user: 37 99 235;
-  }
+@variant dark (.dark &);
 
-  .dark {
-    --background: 17 24 39;
-    --text-primary: 243 244 246;
-    --text-secondary: 156 163 175;
-    --primary: 59 130 246;
-    --primary-hover: 96 165 250;
-    --bubble-agent: 31 41 55;
-    --bubble-user: 59 130 246;
-  }
-
-  body {
-    background-color: rgb(var(--background));
-    color: rgb(var(--text-primary));
-    font-family: 'Inter', system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+@theme {
+  --color-primary: #2563EB;
+  --color-primary-hover: #3B82F6;
 }
 
 @layer components {

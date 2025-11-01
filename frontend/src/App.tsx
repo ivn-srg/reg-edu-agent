@@ -12,6 +12,8 @@ function App() {
     setDarkMode(isDark);
     if (isDark) {
       document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
     }
   }, []);
 
@@ -39,7 +41,7 @@ function App() {
       </div>
       <button
         onClick={toggleDarkMode}
-        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-lg transition-all duration-300 z-[9999]"
+        className="fixed bottom-20 right-4 md:bottom-6 md:right-6 w-10 h-10 md:w-12 md:h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-lg transition-all duration-300 z-[99999]"
         aria-label="Переключить тёмную тему"
         type="button"
       >
