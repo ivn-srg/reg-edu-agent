@@ -37,6 +37,45 @@ export interface TaskResponse {
   task: string;
 }
 
+export interface ConversationCreate {
+  user_id: string;
+  title: string;
+  conversation_type: 'question' | 'quiz' | 'task';
+}
+
+export interface MessageData {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export interface ConversationData {
+  id: number;
+  user_id: string;
+  title: string;
+  conversation_type: string;
+  created_at: string;
+  updated_at: string;
+  messages: MessageData[];
+}
+
+export interface ConversationListItem {
+  id: number;
+  user_id: string;
+  title: string;
+  conversation_type: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface MessageCreate {
+  conversation_id: number;
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -78,6 +117,78 @@ class ApiClient {
     return this.request<TaskResponse>('/task', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  // Conversation history methods
+  async createConversation(data: ConversationCreate): Promise<ConversationData> {
+    return this.request<ConversationData>('/conversations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getConversation(conversationId: number): Promise<ConversationData> {
+    return this.request<ConversationData>(`/conversations/${conversationId}`, {
+      method: 'GET',
+    });
+  }
+
+  async getUserConversations(
+    userId: string,
+    params?: {
+      skip?: number;
+      limit?: number;
+      search?: string;
+      conversation_type?: string;
+      date_from?: string;
+      date_to?: string;
+    }
+  ): Promise<{ conversations: ConversationListItem[]; total: number; skip: number; limit: number }> {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.conversation_type) queryParams.append('conversation_type', params.conversation_type);
+    if (params?.date_from) queryParams.append('date_from', params.date_from);
+    if (params?.date_to) queryParams.append('date_to', params.date_to);
+
+    const queryString = queryParams.toString();
+    const url = `/users/${userId}/conversations${queryString ? `?${queryString}` : ''}`;
+    
+    return this.request<{ conversations: ConversationListItem[]; total: number; skip: number; limit: number }>(url, {
+      method: 'GET',
+    });
+  }
+
+  async deleteConversation(conversationId: number): Promise<{ status: string }> {
+    return this.request<{ status: string }>(`/conversations/${conversationId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async addMessage(data: MessageCreate): Promise<MessageData> {
+    return this.request<MessageData>('/messages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getConversationMessages(conversationId: number): Promise<MessageData[]> {
+    return this.request<MessageData[]>(`/conversations/${conversationId}/messages`, {
+      method: 'GET',
+    });
+  }
+
+  async updateConversationTitle(conversationId: number, title: string): Promise<{ status: string; title: string }> {
+    return this.request<{ status: string; title: string }>(`/conversations/${conversationId}/title?title=${encodeURIComponent(title)}`, {
+      method: 'PUT',
+    });
+  }
+
+  async exportConversation(conversationId: number): Promise<any> {
+    return this.request<any>(`/conversations/${conversationId}/export`, {
+      method: 'GET',
     });
   }
 }

@@ -14,7 +14,7 @@ export default function TypingIndicator() {
           {dots.map((i) => (
             <motion.div
               key={i}
-              className="w-2 h-2 rounded-full bg-text-secondary dark:bg-gray-400"
+              className="w-2 h-2 rounded-full bg-gray-600 dark:bg-gray-400"
               animate={{
                 y: [0, -8, 0],
               }}

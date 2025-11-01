@@ -3,6 +3,7 @@ import { Moon, Sun } from 'lucide-react';
 import Header from './components/Header';
 import Chat from './components/Chat';
 import ChatInput from './components/ChatInput';
+import ConversationHistory from './components/ConversationHistory';
 
 function App() {
   const [darkMode, setDarkMode] = useState(false);
@@ -29,14 +30,17 @@ function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
-      <Header />
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-1 overflow-hidden">
-          <Chat />
-        </div>
-        <div className="flex-shrink-0">
-          <ChatInput />
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+      <ConversationHistory />
+      <div className="flex flex-col flex-1 min-w-0">
+        <Header />
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 overflow-hidden">
+            <Chat />
+          </div>
+          <div className="flex-shrink-0">
+            <ChatInput />
+          </div>
         </div>
       </div>
       <button

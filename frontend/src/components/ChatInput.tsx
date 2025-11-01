@@ -5,7 +5,16 @@ import { apiClient, type MessageHistory } from '../api/client';
 
 export default function ChatInput() {
   const [input, setInput] = useState('');
-  const { addMessage, setLoading, isLoading, currentType, messages } = useChatStore();
+  const { 
+    addMessage, 
+    setLoading, 
+    isLoading, 
+    currentType, 
+    messages,
+    currentConversationId,
+    createNewConversation,
+    saveMessageToDb,
+  } = useChatStore();
 
   const getHistory = (): MessageHistory[] => {
     // Получаем историю сообщений только текущего типа запроса
@@ -23,6 +32,16 @@ export default function ChatInput() {
     const userMessage = input.trim();
     setInput('');
 
+    // Создаем новый диалог, если его еще нет
+    let conversationId = currentConversationId;
+    if (!conversationId) {
+      conversationId = await createNewConversation(currentType);
+      if (!conversationId) {
+        console.error('Failed to create conversation');
+        return;
+      }
+    }
+
     // Получаем историю сообщений текущего типа ДО добавления нового сообщения
     const history = getHistory();
 
@@ -33,38 +52,51 @@ export default function ChatInput() {
       type: currentType,
     });
 
+    // Сохраняем сообщение пользователя в БД
+    await saveMessageToDb('user', userMessage);
+
     setLoading(true);
 
     try {
       let response;
       
+      let assistantMessage = '';
+      
       switch (currentType) {
         case 'question':
           response = await apiClient.ask({ question: userMessage, history });
+          assistantMessage = response.answer;
           addMessage({
             role: 'assistant',
-            content: response.answer,
+            content: assistantMessage,
             type: currentType,
           });
           break;
         
         case 'quiz':
           response = await apiClient.quiz({ topic: userMessage, num: 5, history });
+          assistantMessage = `Квиз по теме "${response.topic}":\n\n${response.questions}`;
           addMessage({
             role: 'assistant',
-            content: `Квиз по теме "${response.topic}":\n\n${response.questions}`,
+            content: assistantMessage,
             type: currentType,
           });
           break;
         
         case 'task':
           response = await apiClient.task({ topic: userMessage, history });
+          assistantMessage = `Задание по теме "${response.topic}":\n\n${response.task}`;
           addMessage({
             role: 'assistant',
-            content: `Задание по теме "${response.topic}":\n\n${response.task}`,
+            content: assistantMessage,
             type: currentType,
           });
           break;
+      }
+      
+      // Сохраняем ответ ассистента в БД
+      if (assistantMessage) {
+        await saveMessageToDb('assistant', assistantMessage);
       }
     } catch (error) {
       console.error('Error sending message:', error);
