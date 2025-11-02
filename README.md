@@ -1,5 +1,11 @@
 ## RAG-EDU Agent (Local)
 
+### Галерея
+<img src="https://github.com/ivn-srg/reg-edu-agent/blob/main/screenshots/general.png" alt="main screen">
+<img src="https://github.com/ivn-srg/reg-edu-agent/blob/main/screenshots/modal.png" alt="create dialog modal">
+<img src="https://github.com/ivn-srg/reg-edu-agent/blob/main/screenshots/modal_onboarding.png" alt="modal onboarding">
+<img src="https://github.com/ivn-srg/reg-edu-agent/blob/main/screenshots/dialog.png" alt="dialog screen">
+
 Локальный RAG-агент для курса «Хранение данных и Введение в Машинное обучение».
 Агент отвечает ТОЛЬКО по материалам в папке `data/`, умеет:
 - отвечать на вопросы в рамках материалов;
