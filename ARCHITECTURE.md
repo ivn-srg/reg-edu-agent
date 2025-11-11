@@ -1,243 +1,231 @@
-# Архитектура системы с историей диалогов
+# Архитектура RAG-EDU Agent
 
-## Общая схема
+## 1. Frontend (React + TypeScript)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         FRONTEND (React)                        │
+│                         FRONTEND                                │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐   │
-│  │ ConversationHist │  │      Chat        │  │  ChatInput   │   │
-│  │   (Sidebar)      │  │   (Messages)     │  │  (Send msg)  │   │
-│  └────────┬─────────┘  └────────┬─────────┘  └──────┬───────┘   │
-│           │                     │                   │           │
-│           └─────────────────────┴───────────────────┘           │
-│                              │                                  │
-│                    ┌─────────▼─────────┐                        │
-│                    │   Zustand Store   │                        │
-│                    │  (State Manager)  │                        │
-│                    └─────────┬─────────┘                        │
-│                              │                                  │
-│                    ┌─────────▼─────────┐                        │
-│                    │    API Client     │                        │
-│                    │  (HTTP Requests)  │                        │
-│                    └─────────┬─────────┘                        │
-└──────────────────────────────┼──────────────────────────────────┘
-                               │
-                               │ HTTP/JSON
-                               │
-┌──────────────────────────────▼─────────────────────────────────┐
-│                      BACKEND (FastAPI)                         │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │                    API Endpoints                         │  │
-│  │  /ask  /quiz  /task  /conversations  /messages  ...      │  │
-│  └────────┬─────────────────────────────────────────────────┘  │
-│           │                                                    │
-│  ┌────────▼──────────┐  ┌──────────────┐  ┌───────────────┐    │
-│  │   RAG System      │  │  CRUD Ops    │  │  LLM (Ollama) │    │
-│  │  (rag.py, quiz,   │  │  (crud.py)   │  │   (llm.py)    │    │
-│  │   tasks.py)       │  └───────┬──────┘  └───────────────┘    │
-│  └───────────────────┘          │                              │
-│                                 │                              │
-│                        ┌────────▼────────┐                     │
-│                        │  Database Layer │                     │
-│                        │  (database.py)  │                     │
-│                        └────────┬────────┘                     │
-└─────────────────────────────────┼──────────────────────────────┘
-                                  │
-                                  │ SQLAlchemy ORM
-                                  │
-                        ┌─────────▼─────────┐
-                        │  SQLite Database  │
-                        │ conversations.db  │
-                        └───────────────────┘
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐   │
+│  │Conversation  │  │     Chat     │  │    ChatInput +       │   │
+│  │  History     │  │  Components  │  │   TypeSelector       │   │
+│  │  (Sidebar)   │  │  (Messages)  │  │  (3 chat types)      │   │
+│  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘   │
+│         │                 │                     │               │
+│         └─────────────────┴─────────────────────┘               │
+│                           │                                     │
+│                 ┌─────────▼──────────┐                          │
+│                 │   Zustand Store    │                          │
+│                 │  - messages        │                          │
+│                 │  - currentType     │                          │
+│                 │  - conversationId  │                          │
+│                 └─────────┬──────────┘                          │
+│                           │                                     │
+│                 ┌─────────▼──────────┐                          │
+│                 │    API Client      │                          │
+│                 └─────────┬──────────┘                          │
+└───────────────────────────┼─────────────────────────────────────┘
+                            │ HTTP/JSON
 ```
 
-## Структура базы данных
+## 2. Backend Architecture (FastAPI)
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                           BACKEND (FastAPI)                              │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │                         API Layer (server.py)                      │  │
+│  │  ┌──────────────┐  ┌───────────────┐  ┌──────────────────────────┐ │  │
+│  │  │ RAG Endpts   │  │History Endpts │  │  Admin Endpoints         │ │  │
+│  │  │ /ask         │  │/conversations │  │  /ingest                 │ │  │
+│  │  │ /quiz        │  │/messages      │  │  /conversations/{id}/    │ │  │
+│  │  │ /task        │  │/users/{id}/   │  │    export                │ │  │
+│  │  └──────┬───────┘  └───────┬───────┘  └──────────────────────────┘ │  │
+│  └─────────┼──────────────────┼───────────────────────────────────────┘  │
+│            │                  │                                          │
+│  ┌─────────▼────────┐  ┌──────▼───────┐                                  │
+│  │   RAG System     │  │ CRUD Layer   │                                  │
+│  │  ┌────────────┐  │  │  (crud.py)   │                                  │
+│  │  │ rag.py     │  │  │              │                                  │
+│  │  │ quiz.py    │  │  │ ┌──────────┐ │                                  │
+│  │  │ tasks.py   │  │  │ │database  │ │                                  │
+│  │  └─────┬──────┘  │  │ │  .py     │ │                                  │
+│  │        │         │  │ │(ORM)     │ │                                  │
+│  │  ┌─────▼──────┐  │  │ └────┬─────┘ │                                  │
+│  │  │validation  │  │  └──────┼───────┘                                  │
+│  │  │  .py       │  │         │                                          │
+│  │  │- Semantic  │  │         │                                          │
+│  │  │  Gating    │  │         │                                          │
+│  │  │- Self-check│  │         │                                          │
+│  │  └─────┬──────┘  │         │                                          │
+│  │        │         │         │                                          │
+│  │  ┌─────▼──────┐  │         │                                          │
+│  │  │  llm.py    │  │         │                                          │
+│  │  │  (Ollama)  │  │         │                                          │
+│  │  └─────┬──────┘  │         │                                          │
+│  └────────┼─────────┘         │                                          │
+│           │                   │                                          │
+│  ┌────────▼────────┐  ┌───────▼────────┐                                 │
+│  │  vectordb.py    │  │ SQLite DB      │                                 │
+│  │  ┌───────────┐  │  │ conversations  │                                 │
+│  │  │FAISS Index│  │  │ messages       │                                 │
+│  │  └───────────┘  │  └────────────────┘                                 │
+│  │  ┌───────────┐  │                                                     │
+│  │  │Embeddings │  │                                                     │
+│  │  │(Sentence  │  │                                                     │
+│  │  │Transform) │  │                                                     │
+│  │  └───────────┘  │                                                     │
+│  └─────────────────┘                                                     │
+│           │                                                              │
+│           │ HTTP API                                                     │
+│  ┌────────▼────────┐                                                     │
+│  │ Ollama Server   │                                                     │
+│  │ localhost:11434 │                                                     │
+│  │ ┌─────────────┐ │                                                     │
+│  │ │ YandexGPT-5 │ │                                                     │
+│  │ │ or other    │ │                                                     │
+│  │ └─────────────┘ │                                                     │
+│  └─────────────────┘                                                     │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+## 3. RAG Agent - Document Ingestion
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    DOCUMENT INGESTION PIPELINE (ingest.py)               │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │ INPUT: data/ directory                                             │  │
+│  │ - *.pdf files                                                      │  │
+│  │ - *.docx files                                                     │  │
+│  └────────────────────────┬───────────────────────────────────────────┘  │
+│                           │                                              │
+│  ┌────────────────────────▼───────────────────────────────────────────┐  │
+│  │ STEP 1: Document Loading                                           │  │
+│  │ ┌──────────────────┐         ┌──────────────────┐                  │  │
+│  │ │  PyPDFLoader     │         │ Docx2txtLoader   │                  │  │
+│  │ │  (для PDF)       │         │ (для DOCX)       │                  │  │
+│  │ └────────┬─────────┘         └────────┬─────────┘                  │  │
+│  │          └────────────┬───────────────┘                            │  │
+│  │                       │                                            │  │
+│  │                  Raw Documents                                     │  │
+│  └────────────────────────┬───────────────────────────────────────────┘  │
+│                           │                                              │
+│  ┌────────────────────────▼───────────────────────────────────────────┐  │
+│  │ STEP 2: Text Splitting (RecursiveCharacterTextSplitter)            │  │
+│  │                                                                    │  │
+│  │  Parameters:                                                       │  │
+│  │  • chunk_size: 1200 символов                                       │  │
+│  │  • chunk_overlap: 200 символов                                     │  │
+│  │  • separators: ["\n\n", "\n", ". ", ", ", " "]                     │  │
+│  │                                                                    │  │
+│  │  Logic:                                                            │  │
+│  │  1. Пытается разбить по "\n\n" (параграфы)                         │  │
+│  │  2. Если чанк > 1200 → разбивает по "\n" (строки)                  │  │
+│  │  3. Если чанк > 1200 → разбивает по ". " (предложения)             │  │
+│  │  4. Если чанк > 1200 → разбивает по ", " (фразы)                   │  │
+│  │  5. Если чанк > 1200 → разбивает по " " (слова)                    │  │
+│  │  6. Overlap 200 символов между чанками для контекста               │  │
+│  └────────────────────────┬───────────────────────────────────────────┘  │
+│                           │                                              │
+│                      Document Chunks                                     │
+│                           │                                              │
+│  ┌────────────────────────▼───────────────────────────────────────────┐  │
+│  │ STEP 3: Embeddings Generation (SentenceTransformer)                │  │
+│  │                                                                    │  │
+│  │  Model: paraphrase-multilingual-MiniLM-L12-v2                      │  │
+│  │  • Поддержка русского и английского                                │  │
+│  │  • Размерность вектора: 384                                        │  │
+│  │  • Batch size: 32 (для эффективности)                              │  │
+│  │  • Локальная работа (без интернета после загрузки)                 │  │
+│  │                                                                    │  │
+│  │  Process:                                                          │  │
+│  │  for batch in chunks (size=32):                                    │  │
+│  │      embeddings = model.encode(batch)                              │  │
+│  │      # Каждый чанк → вектор [384 float]                            │  │
+│  └────────────────────────┬───────────────────────────────────────────┘  │
+│                           │                                              │
+│                   Chunk Embeddings                                       │
+│                           │                                              │
+│  ┌────────────────────────▼───────────────────────────────────────────┐  │
+│  │ STEP 4: FAISS Index Creation (vectordb.py)                         │  │
+│  │                                                                    │  │
+│  │  FAISS.from_documents(chunks, embeddings)                          │  │
+│  │                                                                    │  │
+│  │  Index Type: Flat (L2 distance)                                    │  │
+│  │  • Точный поиск (не approximate)                                   │  │
+│  │  • Оптимально для малых/средних датасетов                          │  │
+│  │                                                                    │  │
+│  │  Saved Files:                                                      │  │
+│  │  • vector_store/index.faiss (индекс)                               │  │
+│  │  • vector_store/index.pkl (метаданные)                             │  │
+│  └────────────────────────┬───────────────────────────────────────────┘  │
+│                           │                                              │
+│                    ✓ Ready for Retrieval                                 │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+## 4. Database Schema (SQLite)
 
 ```
 ┌─────────────────────────────────────┐
 │         conversations               │
 ├─────────────────────────────────────┤
-│ id (PK)                             │
-│ user_id                             │
-│ title                               │
-│ conversation_type                   │
-│ created_at                          │
-│ updated_at                          │
+│ id (PK, Integer)                    │
+│ user_id (String, indexed)           │
+│ title (String)                      │
+│ conversation_type (String)          │
+│   • "question"                      │
+│   • "quiz"                          │
+│   • "task"                          │
+│ created_at (DateTime)               │
+│ updated_at (DateTime)               │
 └─────────────┬───────────────────────┘
-              │ 1
+              │ 1:N
               │
-              │ N
 ┌─────────────▼───────────────────────┐
 │           messages                  │
 ├─────────────────────────────────────┤
-│ id (PK)                             │
-│ conversation_id (FK)                │
-│ role                                │
-│ content                             │
-│ timestamp                           │
+│ id (PK, Integer)                    │
+│ conversation_id (FK, Integer)       │
+│ role (String)                       │
+│   • "user"                          │
+│   • "assistant"                     │
+│ content (Text)                      │
+│ timestamp (DateTime)                │
 └─────────────────────────────────────┘
 ```
 
-## Компоненты системы
-
-### Frontend Components
+## 5. API Endpoints
 
 ```
-App.tsx
-  ├─► ConversationHistory.tsx (Sidebar)
-  │     ├─► Displays list of conversations
-  │     ├─► Handles conversation selection
-  │     └─► Manages conversation deletion
-  │
-  ├─► Header.tsx (Top bar)
-  │
-  ├─► Chat.tsx (Message display)
-  │     └─► Message.tsx (Individual messages)
-  │
-  └─► ChatInput.tsx (Input field)
-        ├─► Creates conversations
-        ├─► Sends messages
-        └─► Saves to database
+┌──────────────────────────────────────────────────────────────────────────┐
+│                            API ENDPOINTS                                 │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  RAG Endpoints:                                                          │
+│  • POST /ingest                    - Rebuild vector store                │
+│  • POST /ask                       - Question answering                  │
+│  • POST /quiz                      - Generate quiz                       │
+│  • POST /task                      - Generate task                       │
+│                                                                          │
+│  History Endpoints:                                                      │
+│  • POST   /conversations           - Create conversation                 │
+│  • GET    /conversations/{id}      - Get conversation                    │
+│  • GET    /users/{id}/conversations - List user conversations            │
+│  • DELETE /conversations/{id}      - Delete conversation                 │
+│  • POST   /messages                - Add message                         │
+│  • GET    /conversations/{id}/messages - Get messages                    │
+│  • PUT    /conversations/{id}/title - Update title                       │
+│  • GET    /conversations/{id}/export - Export conversation               │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Backend Modules
+---
 
-```
-server.py (FastAPI app)
-  ├─► /ask, /quiz, /task (RAG endpoints)
-  │     └─► rag.py, quiz.py, tasks.py
-  │           └─► llm.py (Ollama integration)
-  │
-  └─► /conversations, /messages (History endpoints)
-        └─► crud.py (Database operations)
-              └─► database.py (SQLAlchemy models)
-                    └─► conversations.db (SQLite)
-```
-
-## State Management (Zustand)
-
-```
-ChatState
-  ├─► messages: Message[]
-  ├─► currentType: MessageType | null
-  ├─► isLoading: boolean
-  ├─► currentConversationId: number | null
-  ├─► userId: string
-  │
-  ├─► addMessage()
-  ├─► setCurrentType()
-  ├─► setLoading()
-  ├─► clearMessages()
-  ├─► exportDialog()
-  ├─► setCurrentConversationId()
-  ├─► createNewConversation()
-  ├─► saveMessageToDb()
-  └─► loadConversation()
-```
-
-## API Endpoints
-
-### RAG Endpoints (Existing)
-```
-POST /ingest          - Rebuild vector store
-POST /ask             - Question answering
-POST /quiz            - Generate quiz
-POST /task            - Generate task
-```
-
-### History Endpoints (New)
-```
-POST   /conversations                    - Create conversation
-GET    /conversations/{id}               - Get conversation
-GET    /users/{user_id}/conversations    - List user conversations
-DELETE /conversations/{id}               - Delete conversation
-POST   /messages                         - Add message
-GET    /conversations/{id}/messages      - Get messages
-PUT    /conversations/{id}/title         - Update title
-```
-
-## Data Flow Example: Complete Interaction
-
-```
-┌─────────┐
-│  User   │
-└────┬────┘
-     │ 1. Selects "Question" type
-     ▼
-┌─────────────────┐
-│  TypeSelector   │
-└────┬────────────┘
-     │ 2. Sets currentType in store
-     ▼
-┌─────────────────┐
-│  ChatInput      │
-└────┬────────────┘
-     │ 3. User types "Что такое ML?"
-     │ 4. Checks if conversation exists
-     │ 5. Creates new conversation (if needed)
-     │    POST /conversations
-     ▼
-┌─────────────────┐
-│  Backend API    │
-└────┬────────────┘
-     │ 6. Saves conversation to DB
-     ▼
-┌─────────────────┐
-│  SQLite DB      │
-└────┬────────────┘
-     │ 7. Returns conversation ID
-     ▼
-┌─────────────────┐
-│  ChatInput      │
-└────┬────────────┘
-     │ 8. Saves user message
-     │    POST /messages
-     │ 9. Sends to RAG system
-     │    POST /ask
-     ▼
-┌─────────────────┐
-│  RAG System     │
-└────┬────────────┘
-     │ 10. Retrieves context from vector store
-     │ 11. Generates response with LLM
-     ▼
-┌─────────────────┐
-│  ChatInput      │
-└────┬────────────┘
-     │ 12. Saves assistant message
-     │     POST /messages
-     │ 13. Updates UI
-     ▼
-┌─────────────────┐
-│  Chat Display   │
-└─────────────────┘
-```
-
-## Technology Stack Summary
-
-```
-Frontend:
-  - React 19
-  - TypeScript
-  - Zustand (state)
-  - TailwindCSS (styling)
-  - Vite (bundler)
-
-Backend:
-  - FastAPI
-  - SQLAlchemy
-  - SQLite
-  - Pydantic
-  - Uvicorn
-
-AI/ML:
-  - Ollama (LLM)
-  - FAISS (vector store)
-  - Sentence Transformers (embeddings)
-  - LangChain (RAG framework)
-```
+**Детальная архитектура RAG агента с этапами обработки, фильтрацией и валидацией описана в файле [RAG_DETAILS.md](RAG_DETAILS.md)**
