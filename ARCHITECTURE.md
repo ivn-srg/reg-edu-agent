@@ -4,49 +4,49 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         FRONTEND (React)                         │
+│                         FRONTEND (React)                        │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                   │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐  │
-│  │ ConversationHist │  │      Chat        │  │  ChatInput   │  │
-│  │   (Sidebar)      │  │   (Messages)     │  │  (Send msg)  │  │
-│  └────────┬─────────┘  └────────┬─────────┘  └──────┬───────┘  │
-│           │                     │                    │           │
-│           └─────────────────────┴────────────────────┘           │
-│                              │                                   │
+│                                                                 │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────┐   │
+│  │ ConversationHist │  │      Chat        │  │  ChatInput   │   │
+│  │   (Sidebar)      │  │   (Messages)     │  │  (Send msg)  │   │
+│  └────────┬─────────┘  └────────┬─────────┘  └──────┬───────┘   │
+│           │                     │                   │           │
+│           └─────────────────────┴───────────────────┘           │
+│                              │                                  │
 │                    ┌─────────▼─────────┐                        │
 │                    │   Zustand Store   │                        │
 │                    │  (State Manager)  │                        │
 │                    └─────────┬─────────┘                        │
-│                              │                                   │
+│                              │                                  │
 │                    ┌─────────▼─────────┐                        │
 │                    │    API Client     │                        │
 │                    │  (HTTP Requests)  │                        │
 │                    └─────────┬─────────┘                        │
-└──────────────────────────────┼─────────────────────────────────┘
+└──────────────────────────────┼──────────────────────────────────┘
                                │
                                │ HTTP/JSON
                                │
 ┌──────────────────────────────▼─────────────────────────────────┐
-│                      BACKEND (FastAPI)                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
+│                      BACKEND (FastAPI)                         │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │                    API Endpoints                          │  │
+│  │                    API Endpoints                         │  │
 │  │  /ask  /quiz  /task  /conversations  /messages  ...      │  │
 │  └────────┬─────────────────────────────────────────────────┘  │
-│           │                                                     │
-│  ┌────────▼──────────┐  ┌──────────────┐  ┌───────────────┐  │
-│  │   RAG System      │  │  CRUD Ops    │  │  LLM (Ollama) │  │
-│  │  (rag.py, quiz,   │  │  (crud.py)   │  │   (llm.py)    │  │
-│  │   tasks.py)       │  └──────┬───────┘  └───────────────┘  │
-│  └───────────────────┘         │                               │
-│                                 │                               │
+│           │                                                    │
+│  ┌────────▼──────────┐  ┌──────────────┐  ┌───────────────┐    │
+│  │   RAG System      │  │  CRUD Ops    │  │  LLM (Ollama) │    │
+│  │  (rag.py, quiz,   │  │  (crud.py)   │  │   (llm.py)    │    │
+│  │   tasks.py)       │  └───────┬──────┘  └───────────────┘    │
+│  └───────────────────┘          │                              │
+│                                 │                              │
 │                        ┌────────▼────────┐                     │
 │                        │  Database Layer │                     │
 │                        │  (database.py)  │                     │
 │                        └────────┬────────┘                     │
-└─────────────────────────────────┼───────────────────────────────┘
+└─────────────────────────────────┼──────────────────────────────┘
                                   │
                                   │ SQLAlchemy ORM
                                   │
@@ -54,56 +54,6 @@
                         │  SQLite Database  │
                         │ conversations.db  │
                         └───────────────────┘
-```
-
-## Поток данных при сохранении сообщения
-
-```
-1. User types message
-         │
-         ▼
-2. ChatInput component
-         │
-         ├─► Check if conversation exists
-         │   └─► If not, create new conversation
-         │
-         ├─► Add message to local state (Zustand)
-         │
-         ├─► Save user message to DB
-         │   └─► POST /messages
-         │
-         ├─► Send to LLM for response
-         │   └─► POST /ask or /quiz or /task
-         │
-         ├─► Add assistant response to local state
-         │
-         └─► Save assistant message to DB
-             └─► POST /messages
-```
-
-## Поток данных при загрузке истории
-
-```
-1. User opens sidebar
-         │
-         ▼
-2. ConversationHistory component
-         │
-         ├─► Fetch user conversations
-         │   └─► GET /users/{user_id}/conversations
-         │
-         └─► Display list of conversations
-                   │
-                   ▼
-3. User clicks on conversation
-         │
-         ├─► Fetch conversation with messages
-         │   └─► GET /conversations/{id}
-         │
-         └─► Load messages into Zustand store
-                   │
-                   ▼
-4. Chat component displays messages
 ```
 
 ## Структура базы данных
@@ -267,30 +217,6 @@ PUT    /conversations/{id}/title         - Update title
 │  Chat Display   │
 └─────────────────┘
 ```
-
-## Security Considerations
-
-1. **User Isolation**: Each user has unique ID stored in localStorage
-2. **Data Validation**: Pydantic models validate all API inputs
-3. **SQL Injection**: SQLAlchemy ORM prevents SQL injection
-4. **CORS**: Configured for specific origins only
-
-## Performance Optimizations
-
-1. **Lazy Loading**: Conversations loaded on demand
-2. **Pagination**: Support for limiting conversation lists
-3. **Indexed Queries**: Database indexes on user_id and conversation_id
-4. **Caching**: Zustand persist middleware caches user state
-
-## Scalability Notes
-
-Current implementation uses SQLite for simplicity. For production:
-
-1. **Database**: Migrate to PostgreSQL or MySQL
-2. **Authentication**: Add proper user authentication
-3. **Caching**: Add Redis for session management
-4. **Load Balancing**: Deploy multiple backend instances
-5. **CDN**: Serve frontend assets via CDN
 
 ## Technology Stack Summary
 
