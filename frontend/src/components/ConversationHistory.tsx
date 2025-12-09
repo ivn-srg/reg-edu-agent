@@ -29,16 +29,21 @@ export default function ConversationHistory() {
 
   useEffect(() => {
     loadConversations();
-    
+  }, [userId, searchQuery, filterType, page]);
+
+  useEffect(() => {
     // Устанавливаем callback для обновления списка при создании диалога
-    setOnConversationCreated(() => {
+    const callback = () => {
+      console.log('onConversationCreated callback called');
       loadConversations();
-    });
+    };
+    setOnConversationCreated(callback);
     
     return () => {
       setOnConversationCreated(null);
     };
-  }, [userId, searchQuery, filterType, page]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadConversations = async () => {
     try {
@@ -56,8 +61,17 @@ export default function ConversationHistory() {
   };
 
   const handleSelectConversation = async (conversationId: number) => {
-    await loadConversation(conversationId);
-    setIsOpen(false);
+    try {
+      console.log('Loading conversation:', conversationId);
+      await loadConversation(conversationId);
+      console.log('Conversation loaded successfully');
+      setIsOpen(false);
+      // Обновляем список после загрузки для обновления счетчика сообщений
+      await loadConversations();
+    } catch (error) {
+      console.error('Failed to load conversation:', error);
+      alert(`Не удалось загрузить диалог: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+    }
   };
 
   const handleDeleteConversation = async (conversationId: number, e: React.MouseEvent) => {
@@ -127,22 +141,39 @@ export default function ConversationHistory() {
     setEditTitle(conv.title);
   };
 
-  const handleSaveEdit = async (conversationId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleSaveEdit = async (conversationId: number, e?: React.MouseEvent | React.KeyboardEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
     
-    if (!editTitle.trim()) return;
+    if (!editTitle.trim()) {
+      setEditingId(null);
+      setEditTitle('');
+      return;
+    }
+    
+    const titleToSave = editTitle.trim();
+    setEditingId(null);
+    setEditTitle('');
     
     try {
-      await apiClient.updateConversationTitle(conversationId, editTitle.trim());
+      console.log('Updating conversation title:', conversationId, titleToSave);
+      await apiClient.updateConversationTitle(conversationId, titleToSave);
+      console.log('Title updated successfully');
       await loadConversations();
-      setEditingId(null);
     } catch (error) {
       console.error('Failed to update title:', error);
+      alert(`Не удалось обновить заголовок: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+      // Восстанавливаем редактирование при ошибке
+      setEditingId(conversationId);
+      setEditTitle(titleToSave);
     }
   };
 
-  const handleCancelEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCancelEdit = (e?: React.MouseEvent | React.KeyboardEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
     setEditingId(null);
     setEditTitle('');
   };
@@ -151,11 +182,13 @@ export default function ConversationHistory() {
     setShowTypeModal(true);
   };
 
-  const handleTypeSelect = (type: MessageType) => {
+  const handleTypeSelect = async (type: MessageType) => {
     clearMessages();
     setCurrentType(type);
     setShowTypeModal(false);
     setIsOpen(false);
+    // Обновляем список после создания нового диалога
+    await loadConversations();
   };
 
   const handleSearch = (value: string) => {
@@ -322,23 +355,46 @@ export default function ConversationHistory() {
                     
                     <div className="flex-1 min-w-0">
                       {editingId === conv.id ? (
-                        <div className="flex items-center gap-1 mb-1" onClick={(e) => e.stopPropagation()}>
+                        <div 
+                          className="flex items-center gap-1 mb-1" 
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleSaveEdit(conv.id, e);
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              handleCancelEdit(e);
+                            }
+                          }}
+                        >
                           <input
                             type="text"
                             value={editTitle}
                             onChange={(e) => setEditTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveEdit(conv.id, e);
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                handleCancelEdit(e);
+                              }
+                            }}
                             className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             autoFocus
                           />
                           <button
                             onClick={(e) => handleSaveEdit(conv.id, e)}
                             className="p-1 hover:bg-green-100 dark:hover:bg-green-900/30 rounded"
+                            title="Сохранить (Enter)"
                           >
                             <Check className="w-4 h-4 text-green-600" />
                           </button>
                           <button
                             onClick={handleCancelEdit}
                             className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+                            title="Отменить (Esc)"
                           >
                             <X className="w-4 h-4 text-red-600" />
                           </button>
@@ -413,3 +469,4 @@ export default function ConversationHistory() {
     </>
   );
 }
+

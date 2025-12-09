@@ -5,7 +5,17 @@ import { apiClient, type MessageHistory } from '../api/client';
 
 export default function ChatInput() {
   const [input, setInput] = useState('');
-  const { addMessage, setLoading, isLoading, currentType, messages } = useChatStore();
+  const { 
+    addMessage, 
+    setLoading, 
+    isLoading, 
+    currentType, 
+    messages,
+    userId,
+    currentConversationId,
+    setCurrentConversationId,
+    onConversationCreated,
+  } = useChatStore();
 
   const getHistory = (): MessageHistory[] => {
     // Получаем историю сообщений только текущего типа запроса
@@ -26,45 +36,108 @@ export default function ChatInput() {
     // Получаем историю сообщений текущего типа ДО добавления нового сообщения
     const history = getHistory();
 
-    // Добавляем сообщение пользователя
+    // Создаем или получаем conversation
+    let conversationId = currentConversationId;
+    if (!conversationId) {
+      try {
+        // Создаем новый диалог
+        const title = userMessage.length > 50 ? userMessage.substring(0, 50) + '...' : userMessage;
+        console.log('Creating new conversation:', { userId, title, type: currentType });
+        const newConversation = await apiClient.createConversation({
+          user_id: userId,
+          title: title,
+          conversation_type: currentType,
+        });
+        conversationId = newConversation.id;
+        console.log('Conversation created:', conversationId);
+        setCurrentConversationId(conversationId);
+        
+        // Вызываем callback для обновления списка
+        if (onConversationCreated) {
+          onConversationCreated();
+        }
+      } catch (error) {
+        console.error('Failed to create conversation:', error);
+        alert(`Не удалось создать диалог: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+        return;
+      }
+    }
+
+    // Добавляем сообщение пользователя в локальный store
     addMessage({
       role: 'user',
       content: userMessage,
       type: currentType,
     });
 
+    // Сохраняем сообщение пользователя в БД
+    if (conversationId) {
+      try {
+        console.log('Saving user message to conversation:', conversationId);
+        await apiClient.addMessage(conversationId, {
+          role: 'user',
+          content: userMessage,
+        });
+        console.log('User message saved');
+      } catch (error) {
+        console.error('Failed to save user message:', error);
+        // Не прерываем выполнение, но логируем ошибку
+      }
+    } else {
+      console.error('No conversationId available to save message');
+    }
+
     setLoading(true);
 
     try {
       let response;
+      let assistantMessage = '';
       
       switch (currentType) {
         case 'question':
           response = await apiClient.ask({ question: userMessage, history });
-          addMessage({
-            role: 'assistant',
-            content: response.answer,
-            type: currentType,
-          });
+          assistantMessage = response.answer;
           break;
         
         case 'quiz':
           response = await apiClient.quiz({ topic: userMessage, num: 5, history });
-          addMessage({
-            role: 'assistant',
-            content: `Квиз по теме "${response.topic}":\n\n${response.questions}`,
-            type: currentType,
-          });
+          assistantMessage = `Квиз по теме "${response.topic}":\n\n${response.questions}`;
           break;
         
         case 'task':
           response = await apiClient.task({ topic: userMessage, history });
-          addMessage({
-            role: 'assistant',
-            content: `Задание по теме "${response.topic}":\n\n${response.task}`,
-            type: currentType,
-          });
+          assistantMessage = `Задание по теме "${response.topic}":\n\n${response.task}`;
           break;
+      }
+
+      // Добавляем ответ ассистента в локальный store
+      addMessage({
+        role: 'assistant',
+        content: assistantMessage,
+        type: currentType,
+      });
+
+      // Сохраняем ответ ассистента в БД
+      if (conversationId) {
+        try {
+          console.log('Saving assistant message to conversation:', conversationId);
+          await apiClient.addMessage(conversationId, {
+            role: 'assistant',
+            content: assistantMessage,
+          });
+          console.log('Assistant message saved');
+          
+          // Обновляем список conversations
+          if (onConversationCreated) {
+            console.log('Calling onConversationCreated callback');
+            onConversationCreated();
+          }
+        } catch (error) {
+          console.error('Failed to save assistant message:', error);
+          // Не прерываем выполнение, но логируем ошибку
+        }
+      } else {
+        console.error('No conversationId available to save assistant message');
       }
     } catch (error) {
       console.error('Error sending message:', error);
