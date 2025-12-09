@@ -1,11 +1,5 @@
 ## RAG-EDU Agent (Local)
 
-### Галерея
-<img src="https://github.com/ivn-srg/reg-edu-agent/blob/main/screenshots/general.png" alt="main screen">
-<img src="https://github.com/ivn-srg/reg-edu-agent/blob/main/screenshots/modal.png" alt="create dialog modal">
-<img src="https://github.com/ivn-srg/reg-edu-agent/blob/main/screenshots/modal_onboarding.png" alt="modal onboarding">
-<img src="https://github.com/ivn-srg/reg-edu-agent/blob/main/screenshots/dialog.png" alt="dialog screen">
-
 Локальный RAG-агент для курса «Хранение данных и Введение в Машинное обучение».
 Агент отвечает ТОЛЬКО по материалам в папке `data/`, умеет:
 - отвечать на вопросы в рамках материалов;
@@ -13,38 +7,26 @@
 - составлять задания по обсуждаемой теме;
 — все строго в рамках предоставленных материалов (DOCX/PDF).
 
-### 💻 Минимальные требования
-(для локального тестирования, без тяжёлых моделей вроде Llama 3 70B)
-- CPU: 4 ядра
-- RAM: 16 ГБ
-- GPU (опционально): 6–8 ГБ VRAM 
-- Storage: SSD 25–35 ГБ свободного места
-- OS: macOS 13+, Windows 11, Linux Ubuntu 22.04+
-- Network: стабильное соединение (для скачивания моделей и обновлений)
-- Установленная ПО [Ollama](https://ollama.com/) для работы с LLM
-- Python 3.10+
-
 ### Быстрый старт
 1) Подготовьте Python 3.10+ и виртуальное окружение.
-2) Скачайте LLM внутри Ollama, по-умолчанию это hf.co/yandex/YandexGPT-5-Lite-8B-instruct-GGUF:Q4_K_M. Инструкция для установки другой модели ниже (см. Конфигурация LLM)
-3) Установите зависимости:
+2) Установите зависимости:
    ```bash
    pip install -r requirements.txt
    ```
-4) Поместите лекции в `data/` (форматы: `.pdf`, `.docx`).
-5) Постройте векторное хранилище:
+3) Поместите лекции в `data/` (форматы: `.pdf`, `.docx`).
+4) Постройте векторное хранилище:
    ```bash
    python -m src.cli ingest
    ```
-6) Задайте вопрос:
+5) Задайте вопрос:
    ```bash
    python -m src.cli ask "Что такое нормализация данных?"
    ```
-7) Сгенерируйте квиз по теме:
+6) Сгенерируйте квиз по теме:
    ```bash
    python -m src.cli quiz --topic "Хранение данных" --num 5
    ```
-8) Сгенерируйте задание:
+7) Сгенерируйте задание:
    ```bash
    python -m src.cli task --topic "Введение в Машинное обучение"
    ```
@@ -59,15 +41,6 @@ uvicorn src.server:app --host 0.0.0.0 --port 8000
 - `POST /ask` — вопрос-ответ по материалам (с поддержкой истории диалога)
 - `POST /quiz` — генерация квиза (с поддержкой истории диалога)
 - `POST /task` — генерация задания (с поддержкой истории диалога)
-
-**Эндпоинты для работы с историей диалогов:**
-- `POST /conversations` — создание нового диалога
-- `GET /conversations/{id}` — получение диалога по ID
-- `GET /users/{user_id}/conversations` — список всех диалогов пользователя
-- `DELETE /conversations/{id}` — удаление диалога
-- `POST /messages` — добавление сообщения в диалог
-- `GET /conversations/{id}/messages` — получение всех сообщений диалога
-- `PUT /conversations/{id}/title` — обновление заголовка диалога
 
 ### Запуск Frontend приложения
 
@@ -102,27 +75,14 @@ npm run dev
 - ✅ Анимации сообщений с помощью Framer Motion
 - ✅ Typing индикатор во время генерации ответа
 - ✅ Tooltip с временем отправки сообщений
-- ✅ **История диалогов** — автоматическое сохранение всех переписок в базу данных
-- ✅ **Боковая панель** — просмотр, загрузка и удаление сохраненных диалогов
-- ✅ **Персистентность** — диалоги сохраняются между сессиями
 
-Технологии: React 19, TypeScript, Vite, Tailwind CSS, Framer Motion, Zustand, SQLite
-
-### История диалогов
-
-Все переписки с ботом автоматически сохраняются в базу данных SQLite (`conversations.db`). Функции:
-
-- **Автосохранение**: Каждое сообщение автоматически сохраняется в БД
-- **Боковая панель**: Просмотр всех сохраненных диалогов
-- **Загрузка диалогов**: Продолжение любого предыдущего диалога
-- **Удаление**: Возможность удалить ненужные диалоги
-- **Уникальный User ID**: Автоматическая генерация ID для каждого пользователя
+Технологии: React 19, TypeScript, Vite, Tailwind CSS, Framer Motion, Zustand
 
 ### Конфигурация LLM
 По умолчанию используется Ollama.
 Задайте переменные окружения (создайте `.env` при необходимости):
 
-- `OLLAMA_MODEL` — название модели Ollama (по умолчанию `hf.co/yandex/YandexGPT-5-Lite-8B-instruct-GGUF:Q4_K_M`)
+- `OLLAMA_MODEL` — название модели Ollama (по умолчанию `qwen2.5:7b`)
   - Примеры: `qwen2.5:7b`, `llama3.1:8b`, `mistral:7b`
   - Убедитесь, что модель загружена: `ollama pull <model_name>`
 - `OLLAMA_BASE_URL` — адрес Ollama сервера (по умолчанию `http://localhost:11434`)
@@ -154,3 +114,7 @@ data/              # ваши лекции (.pdf/.docx)
 2) Установите зависимости и переменные окружения.
 3) Выполните `python -m src.cli ingest`.
 4) Запустите API: `uvicorn src.server:app --host 0.0.0.0 --port 8000`.
+
+### Лицензии
+Проверьте лицензии используемых моделей LLM/эмбеддингов перед продакшеном.
+
