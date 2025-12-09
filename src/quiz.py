@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from typing import List, Dict, Optional
-
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
-from .llm import get_chat_llm
 from .ingest import load_vector_store
-
+from .llm import get_chat_llm
+from .validation import semantic_gating
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 QUIZ_SYSTEM = (
     "Ты — ИИ-преподаватель курса \"Хранение данных и Введение в Машинное обучение\".  \n"
@@ -31,12 +30,21 @@ QUIZ_SYSTEM = (
     "=== Дополнительные указания ===\n"
     "• Используй только факты, формулы, определения и примеры, встречающиеся в контексте.  \n"
     "• Если материала недостаточно для полного теста, создай меньшее количество вопросов и укажи причину.  \n"
-    "• В конце выведи краткое пояснение: какие темы покрыты, какие упущены (если есть).")
+    "• В конце выведи краткое пояснение: какие темы покрыты, какие упущены (если есть). \n"
+    "=== Пример и формат вывода результата === \n"
+    "user: Базовые запросы SQL\n"
+    "assistant: Список тестовых вопросов по теме Базовые запросы SQL\n"
+    "Что делает запрос SELECT?\n"
+    "1) Извлекает данные из таблицы\n"
+    "2) Создает новую таблицу\n"
+    "3) Обновляет данные в таблице\n"
+    "4) Удаляет данные из таблицы\n"
+)
 
 QUIZ_PROMPT = ChatPromptTemplate.from_messages([
     ("system", QUIZ_SYSTEM),
     ("human", (
-        "Сгенерируй {num} вопросов по теме: {topic}.\n"
+        "Сгенерируй {num} тестовых вопросов с вариантами ответов по теме: {topic}.\n"
         "Ограничивайся информацией в Контексте. Форматируй как пронумерованный список.\n\n"
         "Контекст:\n{context}\n\nВопросы:")),
 ])
@@ -44,9 +52,19 @@ QUIZ_PROMPT = ChatPromptTemplate.from_messages([
 
 def generate_quiz(topic: str, num: int = 5, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, str]:
     vdb = load_vector_store()
-    retriever = vdb.as_retriever(k=6)
+    retriever = vdb.as_retriever(k=6, fetch_k=12)
     context_docs = retriever.invoke(topic)
-    context = "\n---\n".join(d.page_content for d in context_docs)
+    
+    # Apply semantic gating with threshold 0.4 for quiz type
+    filtered_docs = semantic_gating(topic, context_docs, threshold=0.4)
+    
+    if not filtered_docs:
+        return {
+            "topic": topic,
+            "questions": "Информация по этой теме отсутствует в предоставленных материалах."
+        }
+    
+    context = "\n---\n".join(d.page_content for d in filtered_docs)
 
     # Формируем историю сообщений
     messages = [SystemMessage(content=QUIZ_SYSTEM)]

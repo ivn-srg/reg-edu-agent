@@ -8,6 +8,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from .llm import get_chat_llm
 from .ingest import load_vector_store
+from .validation import semantic_gating
 
 
 TASK_SYSTEM = (
@@ -40,9 +41,19 @@ TASK_PROMPT = ChatPromptTemplate.from_messages([
 
 def generate_task(topic: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, str]:
     vdb = load_vector_store()
-    retriever = vdb.as_retriever(k=8)
+    retriever = vdb.as_retriever(k=8, fetch_k=16)
     context_docs = retriever.invoke(topic)
-    context = "\n---\n".join(d.page_content for d in context_docs)
+    
+    # Apply semantic gating with threshold 0.4 for task type
+    filtered_docs = semantic_gating(topic, context_docs, threshold=0.4)
+    
+    if not filtered_docs:
+        return {
+            "topic": topic,
+            "task": "Информация по этой теме отсутствует в предоставленных материалах."
+        }
+    
+    context = "\n---\n".join(d.page_content for d in filtered_docs)
 
     # Формируем историю сообщений
     messages = [SystemMessage(content=TASK_SYSTEM)]

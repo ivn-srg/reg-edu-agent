@@ -24,5 +24,6 @@ export interface ChatState {
   setCurrentConversationId: (id: number | null) => void;
   loadConversation: (conversationId: number) => Promise<void>;
   setOnConversationCreated: (callback: (() => void) | null) => void;
+  saveMessageToDb: (message: Omit<Message, 'id' | 'timestamp'>) => Promise<void>;
 }
 

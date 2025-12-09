@@ -10,6 +10,7 @@ from langchain_core.output_parsers import StrOutputParser
 
 from .ingest import load_vector_store
 from .llm import get_chat_llm
+from .validation import semantic_gating, comprehensive_validation
 
 
 SYSTEM_PROMPT = (
@@ -58,14 +59,29 @@ def _format_docs(docs) -> str:
 class RAGQA:
     def __init__(self, llm: BaseChatModel | None = None, k: int = 5) -> None:
         self.vdb = load_vector_store()
-        self.retriever = self.vdb.as_retriever(k=k)
+        self.retriever = self.vdb.as_retriever(k=k, fetch_k=k*2)
         self.llm = llm or get_chat_llm()
+        self.k = k
+        # Semantic gating threshold for question type
+        self.semantic_threshold = 0.3
 
     def ask(self, question: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, str]:
+        # Step 1: Retrieve documents with fetch_k strategy
         context_docs = self.retriever.invoke(question)
-        context = _format_docs(context_docs)
         
-        # Формируем историю сообщений
+        # Step 2: Apply semantic gating to filter by relevance
+        filtered_docs = semantic_gating(question, context_docs, threshold=self.semantic_threshold)
+        
+        # If no relevant documents found, return "not in materials" message
+        if not filtered_docs:
+            return {
+                "question": question,
+                "answer": "Эта информация отсутствует в предоставленных материалах."
+            }
+        
+        context = _format_docs(filtered_docs)
+        
+        # Step 3: Format history
         messages = [SystemMessage(content=SYSTEM_PROMPT)]
         
         if history:
@@ -75,12 +91,15 @@ class RAGQA:
                 elif msg["role"] == "assistant":
                     messages.append(AIMessage(content=msg["content"]))
         
-        # Добавляем текущий вопрос с контекстом
+        # Step 4: Invoke LLM
         messages.append(HumanMessage(content=f"Вопрос: {question}\n\nКонтекст:\n{context}\n\nТвой ответ:"))
-        
-        # Вызываем LLM
         response = self.llm.invoke(messages)
         answer = response.content if hasattr(response, 'content') else str(response)
+        
+        # Step 5: Validate answer (only for question type)
+        validation_result = comprehensive_validation(answer, context, question)
+        if not validation_result["is_valid"]:
+            answer = "Эта информация отсутствует в предоставленных материалах."
         
         return {"question": question, "answer": answer}
 

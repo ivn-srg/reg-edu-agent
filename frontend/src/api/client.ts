@@ -102,30 +102,48 @@ class ApiClient {
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
+    try {
+      // Убедимся, что endpoint начинается с /
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      const url = `${this.baseUrl}${normalizedEndpoint}`;
+      
+      const finalOptions: RequestInit = {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      };
+      
+      console.log(`Making ${finalOptions.method || 'GET'} request to:`, url);
+      console.log('Request body:', finalOptions.body);
+      console.log('Request headers:', finalOptions.headers);
+      
+      const response = await fetch(url, finalOptions);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`API error ${response.status}:`, errorText);
-      throw new Error(`API error ${response.status}: ${response.statusText}`);
-    }
-
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      const data = await response.json();
-      return data as T;
-    } else {
-      // Если ответ не JSON, возвращаем пустой массив для списков или null для объектов
-      if (endpoint.includes('/messages')) {
-        return [] as T;
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API error ${response.status} for ${url}:`, errorText);
+        throw new Error(`API error ${response.status}: ${response.statusText}`);
       }
-      throw new Error('Invalid response format: expected JSON');
+
+      // Для ответов без контента (например, 204 No Content)
+      if (response.status === 204) {
+        return {} as T;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        // Ensure we return the data as-is, even if it's null or undefined
+        return data as T;
+      } else {
+        console.warn('Response is not JSON, returning empty object');
+        return {} as T;
+      }
+    } catch (error) {
+      console.error('Request failed:', error);
+      throw error;
     }
   }
 
@@ -192,45 +210,34 @@ class ApiClient {
     conversationId: number,
     data: MessageCreateRequest
   ): Promise<MessageResponse> {
-    return this.request<MessageResponse>(`/conversations/${conversationId}/messages`, {
+    console.log('Sending message to conversation:', conversationId, data);
+    return this.request<MessageResponse>('/messages', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        ...data,
+      }),
     });
   }
 
   async getConversationMessages(conversationId: number): Promise<MessageResponse[]> {
     try {
       console.log('Fetching messages for conversation:', conversationId);
-      const response = await fetch(`${this.baseUrl}/conversations/${conversationId}/messages`, {
+      const messages = await this.request<MessageResponse[]>(`/conversations/${conversationId}/messages`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`API error ${response.status}:`, errorText);
-        return [];
-      }
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        console.error('Invalid content type:', contentType);
-        return [];
-      }
-
-      const messages = await response.json();
-      console.log('Raw messages response:', messages);
-      console.log('Messages is array:', Array.isArray(messages));
-      
+      console.log('Messages fetched:', messages);
       // Убеждаемся, что возвращается массив
-      if (Array.isArray(messages)) {
-        return messages;
-      } else {
-        console.error('Messages is not an array:', messages);
+      if (!messages) {
+        console.warn('Messages response is null or undefined');
         return [];
       }
+      if (!Array.isArray(messages)) {
+        console.error('Expected an array of messages but got:', messages);
+        return [];
+      }
+      
+      return messages;
     } catch (error) {
       console.error('Error fetching conversation messages:', error);
       // Возвращаем пустой массив при ошибке
@@ -242,9 +249,12 @@ class ApiClient {
     conversationId: number,
     title: string
   ): Promise<ConversationResponse> {
+    const body = JSON.stringify({ title });
+    console.log('Updating title with body:', body);
+    console.log('Conversation ID:', conversationId);
     return this.request<ConversationResponse>(`/conversations/${conversationId}/title`, {
       method: 'PUT',
-      body: JSON.stringify({ title }),
+      body: body,
     });
   }
 

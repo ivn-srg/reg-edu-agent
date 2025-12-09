@@ -236,29 +236,54 @@ def get_user_conversations_endpoint(
 @app.get("/conversations/{conversation_id}", response_model=ConversationResponse)
 def get_conversation_endpoint(conversation_id: int, db: Session = Depends(get_db)):
     """Получение диалога по ID."""
-    conversation = get_conversation(db=db, conversation_id=conversation_id)
-    if not conversation:
+    db_conversation = get_conversation(db, conversation_id=conversation_id)
+    if db_conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    print(db_conversation.conversation_type, db_conversation.title, db_conversation.user_id, db_conversation.messages)
+    # Подсчитываем количество сообщений
+    message_count = len(db_conversation.messages)
     
-    message_count = len(conversation.messages)
     return ConversationResponse(
-        id=conversation.id,
-        user_id=conversation.user_id,
-        title=conversation.title,
-        conversation_type=conversation.conversation_type,
-        created_at=conversation.created_at,
-        updated_at=conversation.updated_at,
+        id=db_conversation.id,
+        user_id=db_conversation.user_id,
+        title=db_conversation.title,
+        conversation_type=db_conversation.conversation_type,
+        created_at=db_conversation.created_at,
+        updated_at=db_conversation.updated_at,
         message_count=message_count
     )
 
 
-@app.delete("/conversations/{conversation_id}")
-def delete_conversation_endpoint(conversation_id: int, db: Session = Depends(get_db)):
-    """Удаление диалога."""
-    success = delete_conversation(db=db, conversation_id=conversation_id)
-    if not success:
+class MessageCreateWithConversation(BaseModel):
+    conversation_id: int
+    role: str
+    content: str
+
+
+@app.post("/messages", response_model=MessageResponse)
+def add_message_direct_endpoint(
+    message: MessageCreateWithConversation,
+    db: Session = Depends(get_db)
+):
+    """Добавление сообщения в диалог (прямой эндпоинт)."""
+    # Проверяем существование диалога
+    conversation = get_conversation(db=db, conversation_id=message.conversation_id)
+    if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    return {"status": "ok"}
+    
+    msg = add_message(
+        db=db,
+        conversation_id=message.conversation_id,
+        role=message.role,
+        content=message.content
+    )
+    return MessageResponse(
+        id=msg.id,
+        conversation_id=msg.conversation_id,
+        role=msg.role,
+        content=msg.content,
+        timestamp=msg.timestamp
+    )
 
 
 @app.post("/conversations/{conversation_id}/messages", response_model=MessageResponse)
@@ -311,14 +336,25 @@ class ConversationTitleUpdate(BaseModel):
 @app.put("/conversations/{conversation_id}/title", response_model=ConversationResponse)
 def update_conversation_title_endpoint(
     conversation_id: int,
-    update: ConversationTitleUpdate,
+    update: Optional[ConversationTitleUpdate] = None,
+    title: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """Обновление заголовка диалога."""
+    # Support both body and query parameter
+    final_title = None
+    if update and update.title:
+        final_title = update.title
+    elif title:
+        final_title = title
+    else:
+        raise HTTPException(status_code=400, detail="Title is required")
+    
+    print(f"Updating conversation {conversation_id} with title: {final_title}")
     conversation = update_conversation_title(
         db=db,
         conversation_id=conversation_id,
-        title=update.title
+        title=final_title
     )
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -333,6 +369,15 @@ def update_conversation_title_endpoint(
         updated_at=conversation.updated_at,
         message_count=message_count
     )
+
+
+@app.delete("/conversations/{conversation_id}")
+def delete_conversation_endpoint(conversation_id: int, db: Session = Depends(get_db)):
+    """Удаление диалога."""
+    success = delete_conversation(db=db, conversation_id=conversation_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"status": "ok"}
 
 
 @app.get("/conversations/{conversation_id}/export", response_model=ConversationExport)

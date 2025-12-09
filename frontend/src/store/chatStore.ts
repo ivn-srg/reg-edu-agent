@@ -1,7 +1,19 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { ChatState, Message, MessageType } from '../types';
 import { exportDialogToExcel } from '../utils/exportDialog';
-import { apiClient } from '../api/client';
+import { apiClient, type MessageResponse } from '../api/client';
+
+type Role = 'user' | 'assistant';
+
+interface ApiMessage {
+  id: string | number;
+  content: string;
+  role: Role;
+  timestamp?: string | number | Date;
+  type?: MessageType;
+}
+
 
 // Генерируем userId при первом использовании
 const generateUserId = (): string => {
@@ -12,34 +24,34 @@ const generateUserId = (): string => {
   return newUserId;
 };
 
-export const useChatStore = create<ChatState>((set, get) => ({
-  messages: [],
-  currentType: null,
+const createChatStore = (set: any, get: any) => ({
+  messages: [] as Message[],
+  currentType: null as MessageType | null,
   isLoading: false,
   userId: generateUserId(),
-  currentConversationId: null,
-  onConversationCreated: null,
+  currentConversationId: null as number | null,
+  onConversationCreated: null as (() => void) | null,
   
-  addMessage: (message) => {
+  addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => {
     const newMessage: Message = {
       ...message,
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date(),
     };
-    set((state) => ({
+    set((state: ChatState) => ({
       messages: [...state.messages, newMessage],
     }));
+    return newMessage;
   },
   
-  setCurrentType: (type) => set({ currentType: type }),
+  setCurrentType: (type: MessageType | null) => set({ currentType: type }),
   
-  setLoading: (loading) => set({ isLoading: loading }),
+  setLoading: (loading: boolean) => set({ isLoading: loading }),
   
   clearMessages: () => set({ messages: [], currentType: null, currentConversationId: null }),
   
   exportDialog: () => {
-    const state = useChatStore.getState();
-    exportDialogToExcel(state.messages);
+    exportDialogToExcel(get().messages);
   },
 
   setUserId: (userId: string) => {
@@ -51,89 +63,142 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   loadConversation: async (conversationId: number) => {
     try {
+      set({ isLoading: true });
+      
       console.log('Loading conversation:', conversationId);
+      // Load conversation details
+      const conversation = await apiClient.getConversation(conversationId);
+      console.log('Conversation loaded:', conversation);
       
-      // Загружаем conversation и messages отдельно для лучшей обработки ошибок
-      let conversation;
-      let messages: any[] = [];
+      if (!conversation) {
+        throw new Error('Conversation not found');
+      }
       
-      try {
-        conversation = await apiClient.getConversation(conversationId);
-        console.log('Conversation loaded:', conversation);
-        
-        if (!conversation) {
-          throw new Error('Conversation not found');
-        }
-      } catch (error) {
-        console.error('Failed to load conversation:', error);
-        throw new Error(`Не удалось загрузить диалог: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+      const conversationType = conversation.conversation_type as MessageType;
+      if (!conversationType) {
+        throw new Error('Conversation type is missing');
       }
 
-      // Инициализируем messages как пустой массив
-      messages = [];
-      
+      // Load messages with proper error handling
+      let messagesResponse: MessageResponse[] = [];
       try {
-        const messagesResponse = await apiClient.getConversationMessages(conversationId);
-        console.log('Messages received:', messagesResponse);
-        console.log('Messages type:', typeof messagesResponse);
-        console.log('Is array:', Array.isArray(messagesResponse));
+        const response = await apiClient.getConversationMessages(conversationId);
+        console.log('Raw messages response:', response);
         
-        // Проверяем, что messagesResponse является массивом
-        if (messagesResponse && Array.isArray(messagesResponse)) {
-          messages = [...messagesResponse]; // Создаем копию массива
+        if (Array.isArray(response)) {
+          messagesResponse = response;
+        } else if (response === null || response === undefined) {
+          console.warn('Messages response is null or undefined');
+          messagesResponse = [];
         } else {
-          console.warn('Messages is not an array or is undefined, using empty array. Received:', messagesResponse);
-          messages = [];
+          console.warn('Messages response is not an array:', typeof response, response);
+          messagesResponse = [];
         }
       } catch (error) {
-        console.error('Failed to load messages, using empty array:', error);
-        messages = [];
+        console.error('Failed to fetch messages:', error);
+        messagesResponse = [];
       }
 
-      // Финальная проверка - гарантируем, что messages это массив
-      if (!Array.isArray(messages)) {
-        console.error('CRITICAL: Messages is still not an array after all checks:', messages, typeof messages);
-        messages = [];
+      console.log('Messages loaded:', messagesResponse, 'Type:', typeof messagesResponse);
+
+      // Process messages with additional validation
+      const appMessages: Message[] = [];
+      if (Array.isArray(messagesResponse)) {
+        for (const msg of messagesResponse) {
+          try {
+            appMessages.push({
+              id: String(msg.id),
+              content: String(msg.content || ''),
+              role: msg.role as Role,
+              timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+              type: conversationType,
+            });
+          } catch (e) {
+            console.error('Error processing message:', msg, e);
+          }
+        }
       }
-
-      console.log('Before map - messages:', messages, 'is array:', Array.isArray(messages), 'length:', messages.length);
-
-      // Преобразуем сообщения из API в формат приложения
-      // Используем messages напрямую, так как мы гарантировали, что это массив
-      const appMessages: Message[] = messages.map((msg: any) => {
-        if (!msg || typeof msg !== 'object' || !msg.id || !msg.content || !msg.role) {
-          console.error('Invalid message format:', msg);
-          return null;
-        }
-        try {
-          return {
-            id: String(msg.id),
-            content: String(msg.content),
-            role: msg.role as 'user' | 'assistant',
-            timestamp: new Date(msg.timestamp || Date.now()),
-            type: conversation.conversation_type as MessageType,
-          };
-        } catch (error) {
-          console.error('Error processing message:', error, msg);
-          return null;
-        }
-      }).filter((msg): msg is Message => msg !== null);
-
-      console.log('App messages:', appMessages);
-
-      set({
+      
+      console.log('App messages processed:', appMessages);
+      
+      const newState = {
         messages: appMessages,
-        currentType: conversation.conversation_type as MessageType,
+        currentType: conversationType,
         currentConversationId: conversationId,
-      });
+        isLoading: false,
+      };
+      
+      console.log('Setting state:', newState);
+      try {
+        set(newState);
+        console.log('State set successfully');
+      } catch (setError) {
+        console.error('Error setting state:', setError);
+        throw setError;
+      }
     } catch (error) {
       console.error('Failed to load conversation:', error);
-      throw error;
+      set({ isLoading: false, messages: [], currentConversationId: null });
+      throw new Error(
+        `Failed to load conversation: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   },
 
+// In chatStore.ts
+  saveMessageToDb: async (message: Omit<Message, 'id' | 'timestamp'>): Promise<void> => {
+    const { currentConversationId } = get();
+    if (!currentConversationId) {
+      throw new Error('No active conversation to save message to');
+    }
+
+    try {
+      await apiClient.addMessage(currentConversationId, {
+        role: message.role,
+        content: message.content,
+      });
+    } catch (error) {
+      console.error('Failed to save message:', error);
+      throw new Error(
+        `Failed to save message: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  },
   setOnConversationCreated: (callback: (() => void) | null) => {
     set({ onConversationCreated: callback });
   },
-}));
+});
+
+// Create the store with persistence
+export const useChatStore = create<ChatState>()(
+  persist(
+    (set, get) => ({
+      ...createChatStore(set, get),
+    }),
+    {
+      name: 'chat-store', // localStorage key
+      onRehydrateStorage: () => (state) => {
+        // Fix Date objects after deserialization
+        try {
+          if (state && Array.isArray(state.messages)) {
+            state.messages = state.messages.map((msg: any) => {
+              if (!msg) return msg;
+              return {
+                ...msg,
+                timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp,
+              };
+            });
+          } else if (state && !state.messages) {
+            state.messages = [];
+          }
+        } catch (error) {
+          console.error('Error rehydrating storage:', error);
+          if (state) {
+            state.messages = [];
+          }
+        }
+      },
+    }
+  )
+);
 

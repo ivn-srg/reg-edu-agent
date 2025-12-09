@@ -6,15 +6,18 @@ import TypingIndicator from './TypingIndicator';
 export default function Chat() {
   const { messages, isLoading } = useChatStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Ensure messages is always an array
+  const safeMessages = Array.isArray(messages) ? messages : [];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+  }, [safeMessages, isLoading]);
 
   return (
     <div className="h-full overflow-y-auto px-4 md:px-6 py-6">
       <div className="max-w-4xl mx-auto">
-        {messages.length === 0 && (
+        {safeMessages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-12">
             <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 dark:bg-gray-700 flex items-center justify-center mb-4">
               <svg
@@ -39,7 +42,7 @@ export default function Chat() {
             </p>
           </div>
         )}
-        {messages.map((message) => (
+        {safeMessages.map((message) => (
           <Message key={message.id} message={message} />
         ))}
         {isLoading && <TypingIndicator />}

@@ -7,14 +7,15 @@ export default function ChatInput() {
   const [input, setInput] = useState('');
   const { 
     addMessage, 
-    setLoading, 
-    isLoading, 
     currentType, 
+    currentConversationId, 
+    saveMessageToDb,
+    onConversationCreated, 
+    setCurrentConversationId,
+    setLoading,
+    isLoading,
     messages,
     userId,
-    currentConversationId,
-    setCurrentConversationId,
-    onConversationCreated,
   } = useChatStore();
 
   const getHistory = (): MessageHistory[] => {
@@ -27,129 +28,116 @@ export default function ChatInput() {
       }));
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading || !currentType) return;
+  // Update the handleSend function in ChatInput.tsx
+const handleSend = async () => {
+  if (!input.trim() || isLoading || !currentType) return;
 
-    const userMessage = input.trim();
-    setInput('');
+  const userMessage = input.trim();
+  setInput('');
 
-    // Получаем историю сообщений текущего типа ДО добавления нового сообщения
-    const history = getHistory();
-
-    // Создаем или получаем conversation
+  try {
+    setLoading(true);
+    
+    // Get conversation ID or create a new conversation
     let conversationId = currentConversationId;
     if (!conversationId) {
-      try {
-        // Создаем новый диалог
-        const title = userMessage.length > 50 ? userMessage.substring(0, 50) + '...' : userMessage;
-        console.log('Creating new conversation:', { userId, title, type: currentType });
-        const newConversation = await apiClient.createConversation({
-          user_id: userId,
-          title: title,
-          conversation_type: currentType,
-        });
-        conversationId = newConversation.id;
-        console.log('Conversation created:', conversationId);
-        setCurrentConversationId(conversationId);
-        
-        // Вызываем callback для обновления списка
-        if (onConversationCreated) {
-          onConversationCreated();
-        }
-      } catch (error) {
-        console.error('Failed to create conversation:', error);
-        alert(`Не удалось создать диалог: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
-        return;
+      const title = userMessage.length > 50 ? userMessage.substring(0, 50) + '...' : userMessage;
+      console.log('Creating new conversation:', { userId, title, type: currentType });
+      const newConversation = await apiClient.createConversation({
+        user_id: userId,
+        title: title,
+        conversation_type: currentType,
+      });
+      conversationId = newConversation.id;
+      console.log('Conversation created:', conversationId);
+      setCurrentConversationId(conversationId);
+      
+      if (onConversationCreated) {
+        onConversationCreated();
       }
     }
 
-    // Добавляем сообщение пользователя в локальный store
-    addMessage({
-      role: 'user',
+    // Add user message to local store
+    const userMsg = {
+      role: 'user' as const,
       content: userMessage,
       type: currentType,
+    };
+    addMessage(userMsg);
+
+    // Save user message to database
+    console.log('Saving user message to conversation:', conversationId);
+    await apiClient.addMessage(conversationId, {
+      role: 'user',
+      content: userMessage,
     });
+    console.log('User message saved');
 
-    // Сохраняем сообщение пользователя в БД
-    if (conversationId) {
-      try {
-        console.log('Saving user message to conversation:', conversationId);
-        await apiClient.addMessage(conversationId, {
-          role: 'user',
-          content: userMessage,
+    // Get response based on message type
+    const history = getHistory();
+    let response;
+
+    switch (currentType) {
+      case 'question':
+        response = await apiClient.ask({
+          question: userMessage,
+          history: history,
         });
-        console.log('User message saved');
-      } catch (error) {
-        console.error('Failed to save user message:', error);
-        // Не прерываем выполнение, но логируем ошибку
+        break;
+      case 'quiz':
+        response = await apiClient.quiz({
+          topic: userMessage,
+          history: history,
+        });
+        break;
+      case 'task':
+        response = await apiClient.task({
+          topic: userMessage,
+          history: history,
+        });
+        break;
+      default:
+        throw new Error(`Unknown message type: ${currentType}`);
+    }
+
+    // Process assistant's response
+    if (response) {
+      let content = '';
+      if ('answer' in response) {
+        content = response.answer;
+      } else if ('questions' in response) {
+        content = response.questions;
+      } else if ('task' in response) {
+        content = response.task;
       }
+
+      const assistantMessage = {
+        role: 'assistant' as const,
+        content,
+        type: currentType,
+      };
+
+      // Add to local store
+      addMessage(assistantMessage);
+
+      // Save to database
+      await apiClient.addMessage(conversationId, {
+        role: 'assistant',
+        content: content,
+      });
+
     } else {
-      console.error('No conversationId available to save message');
+      console.error('No response received from server');
+      throw new Error('No response received from server');
     }
 
-    setLoading(true);
-
-    try {
-      let response;
-      let assistantMessage = '';
-      
-      switch (currentType) {
-        case 'question':
-          response = await apiClient.ask({ question: userMessage, history });
-          assistantMessage = response.answer;
-          break;
-        
-        case 'quiz':
-          response = await apiClient.quiz({ topic: userMessage, num: 5, history });
-          assistantMessage = `Квиз по теме "${response.topic}":\n\n${response.questions}`;
-          break;
-        
-        case 'task':
-          response = await apiClient.task({ topic: userMessage, history });
-          assistantMessage = `Задание по теме "${response.topic}":\n\n${response.task}`;
-          break;
-      }
-
-      // Добавляем ответ ассистента в локальный store
-      addMessage({
-        role: 'assistant',
-        content: assistantMessage,
-        type: currentType,
-      });
-
-      // Сохраняем ответ ассистента в БД
-      if (conversationId) {
-        try {
-          console.log('Saving assistant message to conversation:', conversationId);
-          await apiClient.addMessage(conversationId, {
-            role: 'assistant',
-            content: assistantMessage,
-          });
-          console.log('Assistant message saved');
-          
-          // Обновляем список conversations
-          if (onConversationCreated) {
-            console.log('Calling onConversationCreated callback');
-            onConversationCreated();
-          }
-        } catch (error) {
-          console.error('Failed to save assistant message:', error);
-          // Не прерываем выполнение, но логируем ошибку
-        }
-      } else {
-        console.error('No conversationId available to save assistant message');
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      addMessage({
-        role: 'assistant',
-        content: 'Извините, произошла ошибка. Попробуйте еще раз.',
-        type: currentType,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (error) {
+    console.error('Error in handleSend:', error);
+    // Optionally show error to user
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleKeyPress = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
