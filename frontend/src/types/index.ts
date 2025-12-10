@@ -6,6 +6,7 @@ export interface Message {
   role: 'user' | 'assistant';
   timestamp: Date;
   type?: MessageType;
+  generationTime?: number; // Time in seconds for assistant messages
 }
 
 export interface ChatState {
@@ -15,6 +16,7 @@ export interface ChatState {
   userId: string;
   currentConversationId: number | null;
   onConversationCreated: (() => void) | null;
+  onMessageAdded: (() => void) | null;
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
   setCurrentType: (type: MessageType | null) => void;
   setLoading: (loading: boolean) => void;
@@ -24,6 +26,7 @@ export interface ChatState {
   setCurrentConversationId: (id: number | null) => void;
   loadConversation: (conversationId: number) => Promise<void>;
   setOnConversationCreated: (callback: (() => void) | null) => void;
+  setOnMessageAdded: (callback: (() => void) | null) => void;
   saveMessageToDb: (message: Omit<Message, 'id' | 'timestamp'>) => Promise<void>;
 }
 

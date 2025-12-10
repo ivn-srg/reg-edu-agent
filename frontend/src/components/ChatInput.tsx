@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent, useEffect } from 'react';
 import { Send } from 'lucide-react';
 import { useChatStore } from '../store/chatStore';
 import { apiClient, type MessageHistory } from '../api/client';
@@ -9,7 +9,6 @@ export default function ChatInput() {
     addMessage, 
     currentType, 
     currentConversationId, 
-    saveMessageToDb,
     onConversationCreated, 
     setCurrentConversationId,
     setLoading,
@@ -17,6 +16,19 @@ export default function ChatInput() {
     messages,
     userId,
   } = useChatStore();
+
+  useEffect(() => {
+    const handleResendMessage = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const content = customEvent.detail?.content;
+      if (content) {
+        setInput(content);
+      }
+    };
+
+    window.addEventListener('resendMessage', handleResendMessage);
+    return () => window.removeEventListener('resendMessage', handleResendMessage);
+  }, []);
 
   const getHistory = (): MessageHistory[] => {
     // Получаем историю сообщений только текущего типа запроса
@@ -28,8 +40,7 @@ export default function ChatInput() {
       }));
   };
 
-  // Update the handleSend function in ChatInput.tsx
-const handleSend = async () => {
+  const handleSend = async () => {
   if (!input.trim() || isLoading || !currentType) return;
 
   const userMessage = input.trim();
@@ -76,6 +87,7 @@ const handleSend = async () => {
     // Get response based on message type
     const history = getHistory();
     let response;
+    const startTime = Date.now();
 
     switch (currentType) {
       case 'question':
@@ -100,6 +112,8 @@ const handleSend = async () => {
         throw new Error(`Unknown message type: ${currentType}`);
     }
 
+    const generationTime = (Date.now() - startTime) / 1000; // Convert to seconds
+
     // Process assistant's response
     if (response) {
       let content = '';
@@ -115,6 +129,7 @@ const handleSend = async () => {
         role: 'assistant' as const,
         content,
         type: currentType,
+        generationTime,
       };
 
       // Add to local store

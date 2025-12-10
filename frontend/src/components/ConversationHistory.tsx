@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare, Trash2, Plus, Search, Filter, Download, Edit2, Check, X, Trash } from 'lucide-react';
+import { MessageSquare, Trash2, Plus, Search, Filter, Download, Edit2, Check, X, Trash, BookOpen, Moon, Sun } from 'lucide-react';
 import { useChatStore } from '../store/chatStore';
 import { apiClient, type ConversationListItem } from '../api/client';
 import ChatTypeModal from './ChatTypeModal';
+import OnboardingModal from './OnboardingModal';
 import type { MessageType } from '../types';
 
 export default function ConversationHistory() {
@@ -16,7 +17,40 @@ export default function ConversationHistory() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [showTypeModal, setShowTypeModal] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [selectedType, setSelectedType] = useState<MessageType | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('darkMode') === 'true';
+  });
   const limit = 20;
+
+  // Initialize dark mode on mount
+  useEffect(() => {
+    const isDark = localStorage.getItem('darkMode') === 'true';
+    setIsDarkMode(isDark);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  // Sync DOM when isDarkMode state changes
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(prevMode => {
+      const newMode = !prevMode;
+      localStorage.setItem('darkMode', String(newMode));
+      return newMode;
+    });
+  };
   
   const { 
     userId, 
@@ -25,6 +59,7 @@ export default function ConversationHistory() {
     clearMessages,
     setCurrentType,
     setOnConversationCreated,
+    setOnMessageAdded,
   } = useChatStore();
 
   useEffect(() => {
@@ -41,6 +76,20 @@ export default function ConversationHistory() {
     
     return () => {
       setOnConversationCreated(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // Устанавливаем callback для обновления списка при добавлении сообщения
+    const callback = () => {
+      console.log('onMessageAdded callback called');
+      loadConversations();
+    };
+    setOnMessageAdded(callback);
+    
+    return () => {
+      setOnMessageAdded(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -187,6 +236,8 @@ export default function ConversationHistory() {
     setCurrentType(type);
     setShowTypeModal(false);
     setIsOpen(false);
+    setSelectedType(type);
+    setShowOnboarding(true);
     // Обновляем список после создания нового диалога
     await loadConversations();
   };
@@ -238,6 +289,11 @@ export default function ConversationHistory() {
         onClose={() => setShowTypeModal(false)}
         onSelect={handleTypeSelect}
       />
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        chatType={selectedType}
+      />
       
       {/* Mobile toggle button */}
       <button
@@ -263,6 +319,23 @@ export default function ConversationHistory() {
         }`}
       >
         <div className="flex flex-col h-full">
+          {/* App Header */}
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                <BookOpen className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                  EduRAG
+                </h1>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  Data & ML Intro
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Header */}
           <div className="p-4 border-b border-gray-200 dark:border-gray-700 space-y-3">
             <div className="space-y-2">
@@ -438,6 +511,27 @@ export default function ConversationHistory() {
                 </div>
               ))
             )}
+          </div>
+
+          {/* Theme Toggle Button */}
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={toggleDarkMode}
+              className="w-full flex items-center justify-center gap-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded-lg transition-colors text-sm"
+              title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {isDarkMode ? (
+                <>
+                  <Sun className="w-4 h-4" />
+                  Light Mode
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4" />
+                  Dark Mode
+                </>
+              )}
+            </button>
           </div>
 
           {/* Pagination */}

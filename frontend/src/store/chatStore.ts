@@ -1,18 +1,9 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { ChatState, Message, MessageType } from '../types';
 import { exportDialogToExcel } from '../utils/exportDialog';
 import { apiClient, type MessageResponse } from '../api/client';
 
 type Role = 'user' | 'assistant';
-
-interface ApiMessage {
-  id: string | number;
-  content: string;
-  role: Role;
-  timestamp?: string | number | Date;
-  type?: MessageType;
-}
 
 
 // Генерируем userId при первом использовании
@@ -31,6 +22,7 @@ const createChatStore = (set: any, get: any) => ({
   userId: generateUserId(),
   currentConversationId: null as number | null,
   onConversationCreated: null as (() => void) | null,
+  onMessageAdded: null as (() => void) | null,
   
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => {
     const newMessage: Message = {
@@ -41,6 +33,11 @@ const createChatStore = (set: any, get: any) => ({
     set((state: ChatState) => ({
       messages: [...state.messages, newMessage],
     }));
+    // Trigger callback to update conversation list
+    const callback = get().onMessageAdded;
+    if (callback) {
+      callback();
+    }
     return newMessage;
   },
   
@@ -167,38 +164,15 @@ const createChatStore = (set: any, get: any) => ({
   setOnConversationCreated: (callback: (() => void) | null) => {
     set({ onConversationCreated: callback });
   },
+  setOnMessageAdded: (callback: (() => void) | null) => {
+    set({ onMessageAdded: callback });
+  },
 });
 
-// Create the store with persistence
+// Create the store without persistence - we'll load from server instead
 export const useChatStore = create<ChatState>()(
-  persist(
-    (set, get) => ({
-      ...createChatStore(set, get),
-    }),
-    {
-      name: 'chat-store', // localStorage key
-      onRehydrateStorage: () => (state) => {
-        // Fix Date objects after deserialization
-        try {
-          if (state && Array.isArray(state.messages)) {
-            state.messages = state.messages.map((msg: any) => {
-              if (!msg) return msg;
-              return {
-                ...msg,
-                timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp,
-              };
-            });
-          } else if (state && !state.messages) {
-            state.messages = [];
-          }
-        } catch (error) {
-          console.error('Error rehydrating storage:', error);
-          if (state) {
-            state.messages = [];
-          }
-        }
-      },
-    }
-  )
+  (set, get) => ({
+    ...createChatStore(set, get),
+  })
 );
 
